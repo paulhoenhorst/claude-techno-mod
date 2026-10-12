@@ -77,8 +77,8 @@ for (const v of VIBES) {
     if (bad.length) fail(`${v.name}: a bright interval in the chord ${notes}`)
   }
 }
-// every style renders its build and its drop, loud enough and never clipped,
-// and its pad stays dark
+// every style renders its build, its drop and its extras, loud enough and
+// never clipped, and its pad stays dark
 for (const st of STYLES) {
   const t = withStyle(trackFor('style check'), st.name)
   for (const [part, opts] of [[4, { rise: true, build: 'riser' }], [7, { impact: true, build: 'filter' }], [6, {}]]) {
@@ -86,6 +86,13 @@ for (const st of STYLES) {
     let peak = 0
     for (const y of r.left) peak = Math.max(peak, Math.abs(y))
     if (!(peak > 0.1 && peak <= 0.9)) fail(`${st.name} part ${part} peak ${peak}`)
+  }
+  // the extras, all on at once, in a drop and a breakdown
+  for (const part of [7, 8]) {
+    const r = renderLoop({ ...atPart(t, part), layers: { conga: true, shaker: true, drone: true } })
+    let peak = 0
+    for (const y of r.left) peak = Math.max(peak, Math.abs(y))
+    if (!(peak > 0.1 && peak <= 0.9)) fail(`${st.name} extras part ${part} peak ${peak}`)
   }
   const pad = arrange(atPart(t, 6)).events.pad[0].notes
   if (pad.some((n) => [4, 10, 11].includes((n - pad[0]) % 12))) fail(`${st.name}: a bright pad ${pad}`)

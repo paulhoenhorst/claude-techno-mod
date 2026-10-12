@@ -551,7 +551,6 @@ function command(c) {
     }
     case 'jam': changeTrack((t) => {
       let x = t
-      if (c.style) x = E.withStyle(x, c.style)
       for (const k of ['bpm', 'energy', 'swing', 'transpose']) if (c[k] !== undefined) x[k] = c[k]
       if (c.dice) x.dice = (x.dice + 1) % 1000
       for (const [name, v] of Object.entries(c.layers ?? {})) {

@@ -1,6 +1,6 @@
 # techno (Claude Code mod)
 
-A Claude Code mod. A phrase grows a dark techno track (minimal, deep or dark): a long set of about seven
+A Claude Code mod. A phrase grows a dark techno track: a long set of about seven
 minutes (intro, groove, build, three drops with breakdowns between them, an
 outro) that mixes by itself into the next track, layer by layer. One
 background player makes the music for every chat; the band above the chat box
@@ -33,7 +33,7 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 | `scripts/set.mjs` | Render a whole auto set with the handover to a WAV, and print each loop with its bpm, key and transitions: `node scripts/set.mjs "ship it" "warehouse 4am" out.wav`. |
 | `scripts/render.mjs` | Render one loop to a WAV: `node scripts/render.mjs "phrase" out.wav [repeats]`. |
 | `scripts/buildups.mjs` | Render the build into drop 1 once per build-up pack (`0-now`, `1-riser`, `2-filter`, `3-echo`) to compare them: `node scripts/buildups.mjs "late night deploy" previews/buildups`. |
-| `scripts/smoke.mjs` | Fast node checks: version match, every part renders, the handover renders, every build, fall and the swell render, every style renders and keeps a dark pad. |
+| `scripts/smoke.mjs` | Fast node checks: version match, every part renders, the handover renders, every build, fall and the swell render, every style renders with its extras and keeps a dark pad. |
 | `tests/techno.test.ts` | Real tests for `claude plugin test`, against a fake player on the socket. |
 | `player/bin/TechnoPlayer` | The prebuilt helper: one universal binary (arm64 and x86_64, ad-hoc signed), so a new user needs no Xcode tools. `TechnoPlayer.sha1` beside it is the sha1 of the Swift source it came from. |
 | `scripts/build-helper.mjs` | Builds `player/bin/` from `TechnoPlayer.swift`. Run it after every change to the Swift file; smoke fails until you do. |
@@ -45,45 +45,59 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 
 ## Decisions
 
-### 0.10 styles (Ruslan, 2026-10-12)
+### 0.10 dark only (Ruslan, 2026-10-12)
 
 - **Only dark** ("i want my techno to ONLY be dark ... all tracks honestly
   feel too much the same ... diversify all instruments"). Every new song
-  (`trackFor`) gets a style, mood 0 or 1 and a dark scale (minor, phrygian,
-  harmonic). The moods sad and mysterious are gone from the deck and the
-  jam tool; an old share code (no `y`) keeps its mood and plays bit for
-  bit as before (checked against the 0.9.11 engine).
-- **Three styles: minimal, deep, dark** (`STYLES` in engine.js). Hard was
-  built and dropped ("i DON'T like HARD"), industrial too ("let's remove
-  industrial, just deep and dark"; picked "deep, dark, minimal" over "only
-  deep and dark" and "remove industrial only"). A style sets the tempo
-  (minimal 124-127, deep 122-127, dark 130-136), the energy lift, swing,
-  the sounds it picks from, the bass patterns, layers it adds or drops
-  (minimal: no rumble or ride, perc early; deep: pad and rumble early, no
-  ride), the room, the echo and a gain so all sit within about 1.5 LU
-  (-13 to -14 LUFS a drop; dark with a hypnotic line about -11.7).
-- **Leads come by themselves** (`LEADS`, `leadOf`): hypnotic and acid are
-  no buttons. The phrase picks none, a hypnotic line (a soft loop over 3,
-  5 or 7 steps against the bar, from the second groove on) or a 303 (from
-  the build on). Weights per style in `leads`.
-- **New sounds** (end of each `INSTRUMENTS` list, so old indexes hold):
-  kick distorted and click, bass pluck, hats shaker, clap industrial, perc
-  metal and wood. A style track keeps an explicit `%<layer>0`.
-- **Tonality**: a style song's drops walk a chord progression per bar
-  (`PROGRESSIONS`: the minor sixth, the minor seventh, the fourth, the
-  second). About half the songs change key (+1, +2, +5 or -2) for the last
-  breakdown and drop 3 (`transitionsOf(t).key`, applied in `loopSpec`, also
-  without auto, so "next part" reaches it by hand); the outro comes home.
+  (`trackFor`) has `style` 0, the one entry of `STYLES`: dark, mood 0, a
+  dark scale (minor, phrygian, harmonic), 128-136 bpm. The moods sad and
+  mysterious are gone from the deck and the jam tool. An old share code (no
+  `y`) keeps its mood and plays bit for bit as before (checked against the
+  0.9.11 engine, intro parts too).
+- **Styles tried and dropped the same day**: hard ("i DON'T like HARD"),
+  industrial ("let's remove industrial"), then minimal and deep ("ok dark
+  only"). `STYLES` stays a list, so a style can come back.
+- **The variety lives inside a song**, picked by the phrase: the tempo,
+  `lifts` (rolling or peak drops), swing, the room, each sound, two bass
+  lines, the extras and a lead.
+- **Bass lines** ("make the bass lines a bit more diverse ... it feels like
+  it's always the same"): `BASS_LINES`, 12 two-bar lines written as scale
+  degrees with holds (offbeat, rolling octave, gallop, 16th roll, 3-3-2,
+  long walking notes, question and answer, falling under the root, dub,
+  three against four, sparse, acid walk). A song plays one in its intro,
+  groove and build and a busier one (`BUSY`) in its drops; dice picks
+  again. The drop's chord progression moves the line by scale degrees.
+  Two new bass sounds: reese (slow beating saws) and fm (a metallic knock).
+- **Extra instruments** ("you add more other instruments?"): `EXTRAS`,
+  each with even odds a song: conga (three drums tuned to the key, from the
+  second groove on), shaker (16ths, build and drops), drone (root, fifth,
+  octave held, intro and breakdowns, about 8 dB under the mix; it
+  crossfades loop to loop through the tail). Conga and shaker are grid
+  rows. The hats sound once called shaker is "brush" now.
+- **Leads come by themselves** (`LEADS`, `leadOf`): none, a hypnotic line
+  (a soft loop over 3, 5 or 7 steps, from the second groove on) or a 303
+  (from the build on).
+- **New sounds** sit at the end of each `INSTRUMENTS` list, so old indexes
+  hold: kick distorted and click, bass pluck, reese and fm, hats brush,
+  clap industrial, perc metal and wood. A style track keeps an explicit
+  `%<layer>0`.
+- **Tonality**: a drop walks a chord progression per bar (`PROGRESSIONS`).
+  About half the songs change key (+1, +2, +5 or -2) for the last breakdown
+  and drop 3 (`transitionsOf(t).key`, applied in `loopSpec`, also without
+  auto, so "next part" reaches it by hand); the outro comes home.
 - **Tempo glide**: after a handover the new song plays at the old tempo,
   then moves `GLIDE` (2) bpm a loop to its own (`set.bpmTo`, `homeOf`).
   Favorites, history and the saved track keep the home tempo. A tempo you
-  set, or a style click, stops the glide.
-- **The deck**: the mood row is the style row (`styleLine` in views.js,
-  `style-<name>` keys); an old song lights no button. The view keeps `mood`
-  (the style's name) for chats still on 0.9.
-- Listen: `previews/styles-tour.mp3` (each style, with and without a lead)
-  and `previews/set-dark-into-deep.mp3` (gitignored). The deck itself was
-  not captured (no Screen Recording permission); the tests check it.
+  set stops the glide.
+- **Loudness**: drops sit at -12.4 to -14.6 LUFS (as the helper plays them,
+  gain 0.7); a reese bass with a 16th roll is the loudest.
+- **The deck**: the mood buttons are gone; the line over the grid says
+  `dark · 133 bpm` (an old song says its mood). The view keeps `mood` for
+  chats still on 0.9.
+- Listen: `previews/dark-songs.mp3` (six songs, the build into drop 1) and
+  `previews/dark-set.mp3` (a whole set and the handover), gitignored. The
+  deck itself was not captured (no Screen Recording permission); the tests
+  check it.
 
 ### 0.9.10 (Ruslan, 2026-10-08)
 
@@ -576,8 +590,8 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 
 `<phrase-with-hyphens>@<bpm>m<mood>e<energy>[d<dice>][s<swing>][t<transpose>][k<scale>][p<old part>|a<part>][+layer|-layer...][*<layer><on hex4><off hex4>...][%<layer><instrument>...][~<layer><16 degrees>...][^<layer><cut+3><grit>...][!<lp+3><hp><space+2>][/<plan in hex>][y<style>]`
 
-`y` is 0.10: the style (0 minimal, 1 deep, 2 dark). Without it the track
-is an old one and its mood decides.
+`y` is 0.10: the style (0 dark, the only one). Without it the track is an
+old one and its mood decides. Layers added in 0.10: conga, shaker, drone.
 
 The fields after `*` are 0.9 (the edit card); see Decisions 0.9.
 

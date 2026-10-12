@@ -15,7 +15,6 @@
 // brighter text: dim against normal text cannot be read in the light theme.
 
 import { sectionLabel } from './conductor.js'
-import { STYLES } from './engine.js'
 
 const row = (ui, children, extra = {}) => ui.Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 1, alignItems: 'center', children: children.filter(Boolean), ...extra })
 const col = (ui, children, extra = {}) => ui.Box({ flexDirection: 'column', children: children.filter(Boolean), ...extra })
@@ -106,16 +105,11 @@ function whereLine(ui, vm) {
 
 // The style and the tempo, under the song's progress and over the grid
 // (Ruslan, 2026-10-05: "progress of the song ... under it the mood, then
-// the grid"). 0.10: every song is dark, so the moods (sad, mysterious,
-// dark) gave their place to the styles (Ruslan, 2026-10-12: "ONLY be dark
-// ... some tracks HARD techno, some more minimal"). An old song with no
-// style has no button lit.
-function styleLine(ui, vm, act) {
-  return row(ui, [
-    dim(ui, 'style'),
-    ...STYLES.map(({ name }) => toggle(ui, 'style-' + name, name, vm.view.style === name, () => act.style(name))),
-    dim(ui, vm.view.bpm + ' bpm', { key: 'bpm' }),
-  ], { key: 'style' })
+// the grid"). 0.10: every song is dark ("ok dark only", Ruslan,
+// 2026-10-12), so the mood buttons are gone; the line says the sound (an
+// old song says its old mood) and the tempo.
+function styleLine(ui, vm) {
+  return row(ui, [dim(ui, vm.view.mood + ' · ' + vm.view.bpm + ' bpm', { key: 'bpm' })], { key: 'style' })
 }
 
 function bottomLine(ui, vm, act) {
@@ -233,7 +227,7 @@ function deck(ui, vm, act) {
   return [
     topLine(ui, vm, act),
     whereLine(ui, vm),
-    styleLine(ui, vm, act),
+    styleLine(ui, vm),
     vm.gridEl,
     bottomLine(ui, vm, act),
     vm.editOpen ? editCard(ui, vm, act) : null,
