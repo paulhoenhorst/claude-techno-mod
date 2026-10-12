@@ -45,7 +45,26 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 
 ## Decisions
 
+### 0.10.1 one key a song (Ruslan, 2026-10-12)
+
+- "it changes tonalities over the song too much. also sometimes too much
+  melody ... i'd prefer the whole song to be in one tonality, but one song
+  in one tonality, another song in another". So: no key change in the last
+  breakdown and drop 3, no chord walk in the drops (`PROGRESSIONS` and
+  `transitionsOf(t).key` are gone). Songs still differ in key (e, f, f#, g,
+  a) and scale (minor, phrygian, harmonic).
+- The bass lines differ in rhythm only: the root, its octave, and at most
+  one step under the root (the acid walk and the question-and-answer line
+  are gone).
+- Leads are rarer and later: about one song in four (`leads: [6, 1, 1]`);
+  the hypnotic line from the first breakdown to drop 3, the 303 in drop 2,
+  the second breakdown and drop 3.
+- The test "tonality" walks a whole set of 30 songs and checks that every
+  loop stays in the song's key.
+
 ### 0.10 dark only (Ruslan, 2026-10-12)
+
+The 0.10.1 notes above replace the tonality and lead points below.
 
 - **Only dark** ("i want my techno to ONLY be dark ... all tracks honestly
   feel too much the same ... diversify all instruments"). Every new song

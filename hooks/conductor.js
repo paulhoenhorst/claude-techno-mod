@@ -41,11 +41,8 @@ export function loopSpec(set, { auto }) {
   const rise = !!fx && last && fx.build[k] !== undefined
   const drop = p.section === 'drop' && set.loop === 0
   const landed = !!set.swapped && set.loop === 0
-  // a key change from transitionsOf: this loop plays transposed. Not only
-  // with auto: it belongs to the part, so "next part" reaches it by hand too.
-  const shift = transitionsOf(set.track).key[k]
   return {
-    track: shift ? { ...set.track, transpose: (set.track.transpose + shift) % 12 } : set.track,
+    track: set.track,
     with: null,
     rise,
     impact: drop || landed,

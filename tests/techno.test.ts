@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, EXTRAS, BASS_LINES, extrasOf, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
+import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, keyName, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, EXTRAS, BASS_LINES, extrasOf, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
 import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE } from '../hooks/conductor.js'
 import { partBar } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
@@ -563,23 +563,30 @@ test('only dark: every new song has a style, a dark scale and its own tempo; old
   }
 })
 
-test('tonality: a drop walks its chords, some songs change key for the last breakdown and drop, auto glides the tempo', () => {
-  // a drop walks a chord progression: in some songs its last bars sit on another note than its first
-  const lowest = (a: any, bar: number) => Math.min(...a.events.bass.filter((e: any) => Math.floor(e.step / 16) === bar).map((e: any) => e.note))
-  const moved = Array.from({ length: 30 }, (_, n) => arrange(atPart(trackFor('song ' + n), 5))).filter((a) => [4, 6].some((bar) => lowest(a, bar) !== lowest(a, 0)))
-  expect(moved.length).toBeGreaterThan(5)
-  // the key change: the last breakdown and drop 3 move, the outro is home, with or without auto
-  const t = trackFor('warehouse 4am')
-  const fx = transitionsOf(t)
-  expect(fx.key[8]).toBe(2)
-  expect(fx.key[9]).toBe(2)
-  for (const auto of [true, false]) {
-    const set = newSet(atPart(t, 9))
-    expect(loopSpec(set, { auto }).track.transpose).toBe((t.transpose + 2) % 12)
-    set.track = atPart(t, 10); set.at = 10
-    expect(loopSpec(set, { auto }).track.transpose).toBe(t.transpose)
+test('tonality: one key a song, another song another key; auto glides the tempo', () => {
+  // Ruslan, 2026-10-12: "i'd prefer the whole song to be in one tonality, but one song in one tonality, another song in another"
+  const songs = Array.from({ length: 30 }, (_, n) => trackFor('song ' + n))
+  for (const s0 of songs) {
+    const set = newSet(s0)
+    const home = set.track.transpose
+    const scale = new Set(arrange(set.track).scale.map((x: number) => (arrange(set.track).root + x) % 12))
+    while (!set.handover) {
+      const spec = loopSpec(set, { auto: true })
+      expect(spec.track.transpose).toBe(home)
+      const a = arrange({ ...spec.track, layers: { acid: true, bass: true } })
+      // the bass sits on the root, its octave, or one step under the root
+      for (const e of a.events.bass) expect([0, (a.scale[6] + 0) % 12].includes(((e.note - a.root) % 12 + 12) % 12)).toBe(true)
+      for (const e of a.events.acid) expect(scale.has(e.note % 12)).toBe(true)
+      afterLoop(set, { auto: true, nextTrack: () => s0 })
+    }
   }
-  expect(Array.from({ length: 40 }, (_, n) => Object.keys(transitionsOf(trackFor('song ' + n)).key).length).filter((k) => k > 0).length).toBeGreaterThan(5)
+  // songs differ in key and scale
+  expect(new Set(songs.map((t) => keyName(t))).size).toBeGreaterThan(5)
+  // a lead line in about one song in four, not in every song
+  const leads = Array.from({ length: 80 }, (_, n) => leadOf(trackFor('lead ' + n))).filter(Boolean).length
+  expect(leads).toBeGreaterThan(8)
+  expect(leads).toBeLessThan(35)
+  const t = trackFor('warehouse 4am')
   // the glide: the new song mixes in at the old tempo, then moves GLIDE bpm a loop to its own
   const deep = trackFor('cold sleep')
   const set = newSet(atPart(t, PLAN.length - 1))

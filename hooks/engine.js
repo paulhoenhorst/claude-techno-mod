@@ -59,7 +59,7 @@ const scaleOf = (t) => t.scale ?? (t.mood === 0 ? 2 : t.mood >= 3 ? 1 : 0)
 //   rooms   the reverb sizes to pick from; `echo` more of the ping-pong on perc and acid
 //   gain    the level into the master's soft clip
 export const STYLES = [
-  { name: 'dark', bpm: [128, 136], mood: 0, lifts: [0, 1, 1], scales: [2, 0, 4], swing: [0, 0, 1], kick: [0, 1, 2], bass: [0, 1, 2, 4, 5, 6], hats: [0, 1, 2, 3, 4], clap: [0, 1, 2], perc: [1, 2, 3, 4, 5], drops: [], adds: {}, leads: [2, 1, 1], rooms: [0.8, 0.86, 0.92], echo: 1.2, gain: 0.95 },
+  { name: 'dark', bpm: [128, 136], mood: 0, lifts: [0, 1, 1], scales: [2, 0, 4], swing: [0, 0, 1], kick: [0, 1, 2], bass: [0, 1, 2, 4, 5, 6], hats: [0, 1, 2, 3, 4], clap: [0, 1, 2], perc: [1, 2, 3, 4, 5], drops: [], adds: {}, leads: [6, 1, 1], rooms: [0.8, 0.86, 0.92], echo: 1.2, gain: 0.95 },
 ]
 // The extra instruments (Ruslan, 2026-10-12: "you add more other
 // instruments?"). The phrase picks each one with even odds, so one song has
@@ -77,13 +77,15 @@ export function extrasOf(t) {
 // The lead lines a style may bring, picked by the phrase (Ruslan's answer
 // on 2026-10-12: hypnotic and acid are no buttons, they come by themselves):
 //   hypnotic  a soft line that loops over 3, 5 or 7 steps against the bar,
-//             from the second groove on, the breakdowns too
-//   acid      the 303, from the build on, alone in the second breakdown
+//             from the first breakdown to drop 3
+//   acid      the 303, in drop 2, the second breakdown and drop 3
+// About one song in four has one ("sometimes too much melody", Ruslan,
+// 2026-10-12).
 // Each sets the acid layer's sound (indexes into INSTRUMENTS.acid) and its
 // level (the hypnotic line plays on most steps, so it sits lower).
 export const LEADS = {
-  hypnotic: { parts: [3, 4, 5, 6, 7, 8, 9], acid: [2, 3], level: 0.5 },
-  acid: { parts: [4, 5, 7, 8, 9], acid: [0, 1], level: 0.85 },
+  hypnotic: { parts: [6, 7, 8, 9], acid: [2, 3], level: 0.5 },
+  acid: { parts: [7, 8, 9], acid: [0, 1], level: 0.85 },
 }
 const LEAD_NAMES = [null, 'hypnotic', 'acid']
 const styleOf = (t) => (t?.style === null || t?.style === undefined ? null : STYLES[t.style] ?? null)
@@ -283,7 +285,7 @@ export function transitionsOf(input) {
   const at = (k) => PLAN[plan[k]]
   // keyed by the position in the track's plan; a build goes on the part
   // right before a drop, a fall on the last loop of a drop
-  const out = { build: {}, fall: {}, swell: {}, swap: null, land: 'kick', key: {} }
+  const out = { build: {}, fall: {}, swell: {}, swap: null, land: 'kick' }
   let last = null
   const rises = plan.map((_, k) => (at(k).section !== 'drop' && at(k + 1)?.section === 'drop' ? k : -1)).filter((k) => k >= 0)
   for (const k of rises) {
@@ -295,17 +297,6 @@ export function transitionsOf(input) {
   plan.forEach((_, k) => { if (at(k + 1)?.adds && !rises.includes(k) && at(k).section !== 'drop' && at(k).section !== 'break') out.swell[k] = r() < 0.6 })
   out.swap = weighted(r, BUILDS, BUILD_WEIGHTS[mood], [out.build[rises[rises.length - 1]]])
   out.land = weighted(r, ['kick', 'hats'], LAND_WEIGHTS[mood])
-  // a key change (0.10, style tracks only, about half of them): the last
-  // breakdown and the last drop move up a semitone, a tone or a fourth, or
-  // down a tone; the outro comes home, so the handover meets the home key
-  if (styleOf(t) && r() < 0.5) {
-    const shift = pick(r, [1, 2, 5, 10])
-    const last = plan.map((i) => PLAN[i].section).lastIndexOf('drop')
-    if (last > 0) {
-      out.key[last] = shift
-      if (at(last - 1).section === 'break') out.key[last - 1] = shift
-    }
-  }
   return out
 }
 
@@ -538,32 +529,28 @@ const PERC_PATTERNS = ['.x..x.....x..x..', '...x..x....x..x.', 'x..x..x..x..x...
 const CONGA_PATTERNS = ['..l..m.h..l..m..', 'h..m..l.h..m.l..', '.m.l..h..m.l..h.', 'l.mh..m.l.mh..m.', '..h.l..m..h.l.m.', 'm..l.h..m..l.hh.']
 const STAB_PATTERNS = ['..x.......x.....', '...x......x.....', '..x..x....x.....', '.......x..x....x']
 // The bass lines of a style song (Ruslan, 2026-10-12: "make the bass lines a
-// bit more diverse ... it feels like it's always the same"). Two bars each,
-// 16 steps a bar: '.' a rest, '-' holds the note before, a digit a scale
-// degree (0 the root, 7 the octave), 'a' and 'b' one and two degrees under
-// the root. A song picks one line for its intro, groove and build, and a
-// busier one for its drops; a new rhythm (dice) picks again.
+// bit more diverse ... it feels like it's always the same"; then "too much
+// melody ... i'd prefer the whole song to be in one tonality"). They differ
+// in rhythm, not in melody: the root, its octave, and at most one step
+// under the root. Two bars each, 16 steps a bar: '.' a rest, '-' holds the
+// note before, a digit a scale degree (0 the root, 7 the octave), 'a' one
+// degree under the root. A song plays one line in its intro, groove and
+// build, and a busier one in its drops; a new rhythm (dice) picks again.
 export const BASS_LINES = [
   ['..0...0...0...0.', '..0...0...0...0.'], // offbeat, the classic
-  ['.07..07..07..07.', '.07..07..07..05.'], // rolling, up the octave
-  ['.000.000.000.000', '.000.000.000.111'], // gallop, a step up at the end
-  ['0000000000000000', '0000000000005555'], // a 16th roll, the sixth at the end
-  ['0..0..0.0..0..0.', '0..0..0.0..0..3.'], // 3-3-2
-  ['0-------....5---', '0-------....6-3-'], // long notes that walk
-  ['..0...0...0..7.0', '..0...0...3..2.0'], // a question and an answer
-  ['..0...0...0...0a', '..0...0...0..ba0'], // offbeat, falling under the root
-  ['..0-....0-....7-', '..0-....0-..5-3-'], // dub, held and sparse
+  ['.07..07..07..07.', '.07..07..07..07.'], // rolling, up the octave
+  ['.000.000.000.000', '.000.000.000.077'], // gallop, the octave at the end
+  ['0000000000000000', '0000000000007777'], // a 16th roll
+  ['0..0..0.0..0..0.', '0..0..0.0..0..7.'], // 3-3-2
+  ['0-------....0---', '0-------....7-0-'], // long notes
+  ['..0...0...0..7.0', '..0...0...0..7.0'], // offbeat with an octave pickup
+  ['..0...0...0...0a', '..0...0...0...0a'], // offbeat, a step under the root into the bar
+  ['..0-....0-....7-', '..0-....0-....0-'], // dub, held and sparse
   ['0..0..0..0..0..0', '..0..0..0..0..0.'], // three against four
-  ['...0......0..0..', '...0......5..3..'], // sparse stabs of bass
-  ['.0.0.3.0.0.5.0.7', '.0.0.3.0.0.1.0.0'], // an acid walk
+  ['...0......0..0..', '...0......0..7..'], // sparse
+  ['.0.0.7.0.0.7.0.0', '.0.0.7.0.0.7.0.7'], // bouncing on the octave
 ]
 const BUSY = [1, 2, 3, 4, 6, 7, 9, 11] // the lines a drop may play
-// Where a style track's drops move, one scale degree per bar of the loop
-// (Ruslan, 2026-10-12: "maybe change tonality sometimes?"). The intro, the
-// groove and the breakdowns stay on the root; a drop walks one of these.
-// 5 is the minor sixth, 6 the minor seventh, 3 the fourth, 1 the second
-// (the flat second on phrygian, the darkest step).
-const PROGRESSIONS = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 5, 5], [0, 0, 0, 0, 5, 5, 6, 6], [0, 0, 3, 3, 0, 0, 5, 5], [0, 0, 0, 0, 1, 1, 0, 0], [0, 0, 6, 6, 5, 5, 0, 0]]
 const ACID_PALETTE = [0, 7, 0, 4, 0, 2, 0, 6, 0, 9, 3, 0, 4, 7, 0, 1, 0, 5, 0, 4, 2, 0, 7, 0, 6, 0, 3, 4, 0, 7, 2, 0, 9, 0, 4, 5]
 
 function charCode(ch) {
@@ -597,17 +584,13 @@ export function arrange(input) {
   let dropLine = BUSY[(lineSeed >>> 8) % BUSY.length]
   if (dropLine === grooveLine) dropLine = BUSY[((lineSeed >>> 8) + 1) % BUSY.length]
   const line = st ? BASS_LINES[t.part !== null && t.part !== undefined && PLAN[t.part].section === 'drop' ? dropLine : grooveLine] : null
-  const lineDegree = (c) => (c === 'a' ? -1 : c === 'b' ? -2 : Number(c))
+  const lineDegree = (c) => (c === 'a' ? -1 : Number(c))
   const bassIntervals = [0, 0, 12, 0, 0, 7, 0, 0].map((v) => (scale[1] === 1 && v === 7 ? 1 : v))
   const percPattern = pick(r, PERC_PATTERNS)
   const percPick = pick(r, ['rim', 'tom', 'bell'])
   const percKind = inst.perc ? INSTRUMENTS.perc[inst.perc] : percPick
   const stabSlot = Math.floor(r() * STAB_PATTERNS.length)
   const kickGhost = t.energy >= 4 && r() < 0.6
-  // a style track's drop walks a progression; everything else holds the root
-  const isDrop = t.part !== null && t.part !== undefined && PLAN[t.part].section === 'drop'
-  const prog = st && isDrop ? PROGRESSIONS[hash32('prog:' + t.phrase + ':' + t.dice) % PROGRESSIONS.length] : null
-  const move = (bar) => (prog ? degree(prog[bar]) : 0)
   // the extras' patterns, picked by the phrase
   const congaPattern = CONGA_PATTERNS[hash32('conga:' + t.phrase + ':' + t.dice) % CONGA_PATTERNS.length]
   // the hypnotic lead loops its line over 3, 5 or 7 steps against the bar
@@ -642,7 +625,7 @@ export function arrange(input) {
       if (line) {
         const c = line[bar % 2][s]
         if (c === '-' && ev.bass.length) ev.bass[ev.bass.length - 1].len++
-        else if (c !== '.' && c !== '-') ev.bass.push({ step, note: root + degree(lineDegree(c) + (prog ? prog[bar] : 0)), vel: s % 4 === 2 ? 1 : s % 2 ? 0.75 : 0.85, len: 1 })
+        else if (c !== '.' && c !== '-') ev.bass.push({ step, note: root + degree(lineDegree(c)), vel: s % 4 === 2 ? 1 : s % 2 ? 0.75 : 0.85, len: 1 })
       } else if (bassPattern[s] === 'x') ev.bass.push({ step, note: root + bassIntervals[(s + bar) % bassIntervals.length], vel: s % 4 === 2 ? 1 : 0.8 })
       // hats: closed on the offbeat, then 8ths, then a ghost 16th, then 16ths; open hats from peak energy
       const open = (t.energy >= 3 || t.mood >= 4) && s % 4 === 2
@@ -655,7 +638,7 @@ export function arrange(input) {
       if (percPattern[s] === 'x' || (bar === 3 && s >= 12 && s % 2 === 1)) ev.perc.push({ step, vel: s % 3 === 0 ? 1 : 0.7, kind: percKind })
       // acid
       const n = cycle ? riff[step % cycle] : riff[s]
-      if (n) ev.acid.push({ step, ...n, note: n.note + move(bar) })
+      if (n) ev.acid.push({ step, ...n })
       // stab: the pattern shifts every other bar so the chords breathe
       const stabPattern = STAB_PATTERNS[(stabSlot + (bar % 2)) % STAB_PATTERNS.length]
       if (stabPattern[s] === 'x') ev.stab.push({ step, notes: chordShape.map((i) => root + 24 + i), vel: 1 })
