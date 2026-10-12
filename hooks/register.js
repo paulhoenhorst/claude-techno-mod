@@ -8,7 +8,7 @@
 // /techno              show or hide the app
 // /techno <phrase>     a new track from the phrase (or from a share code)
 // /techno stop | save | code
-import { parseCode, encodeCode, describe, render, toWav, grid, activeLayers, cleanTrack, soundInfo, planOf, planAdds, LAYERS, GRID_LAYERS, PLAN, VIBES, BPM_MIN, BPM_MAX, trackFor, moodName } from './engine.js'
+import { parseCode, encodeCode, describe, render, toWav, grid, activeLayers, cleanTrack, soundInfo, planOf, planAdds, LAYERS, GRID_LAYERS, PLAN, STYLES, BPM_MIN, BPM_MAX, trackFor, styleName } from './engine.js'
 import { appView, miniView } from './views.js'
 import { keyWords } from './words.js'
 import { CLASSICS } from './classics.js'
@@ -16,7 +16,7 @@ import { CLASSICS } from './classics.js'
 const TOOL = 'mcp__techno__jam'
 // The plugin version: in the jam tool's answer, and the player of an older
 // version is replaced by this one. Keep it equal to plugin.json (a test checks).
-const VERSION = '0.9.11'
+const VERSION = '0.10.0'
 // [accent, normal] fill of a hit in the step grid
 const LAYER_COLORS = {
   kick: ['#e85a5a', '#c94040'],
@@ -266,8 +266,8 @@ export function register(on) {
     await $.tool.register({
       name: 'jam',
       description:
-        "Change the techno music in the user's techno pane (the techno mod). Use it when the user asks to change the music: darker or brighter, more or less energy, faster or slower, add or drop a layer, new patterns, the next part, the next or previous track, a new phrase, auto on or off, play or stop. Pass only what changes. " +
-        'mood: sad (minor), mysterious (hijaz, arabic) or dark (phrygian); it sets the sound, the scale and the tempo together. energy: 0 minimal, 1 rolling, 2 driving, 3 peak, 4 rave. ' +
+        "Change the techno music in the user's techno pane (the techno mod). Use it when the user asks to change the music: another style, more or less energy, faster or slower, add or drop a layer, new patterns, the next part, the next or previous track, a new phrase, auto on or off, play or stop. Pass only what changes. " +
+        'Every song is dark techno. style: minimal (124-127 bpm, sparse, swung, a click kick and a pluck bass), deep (122-127, dubby, a big room, the pad and the rumble early) or dark (130-136, the driving peak-time sound); it sets the tempo, the sounds and the mix together. Some songs bring a looping hypnotic line or a 303 acid line by themselves; the acid layer turns it on or off. energy: 0 minimal, 1 rolling, 2 driving, 3 peak, 4 rave. ' +
         'A track is a long set: intro, groove, build, three drops with breakdowns between them, an outro that mixes into the next track. next: true moves to the next part. track: "next" mixes into the next track now, "previous" goes back to the one before. ' +
         'layers (kick, bass, hats, clap, perc, ride, pad, rumble, acid, voice, stab): true forces a layer on, false off, "auto" gives it back to the arrangement. dice: true rolls new patterns. phrase: a new phrase starts a new track. favorite: true adds the track to the favorites. volume: 0 mute .. 5 loudest, 4 is the default (each step about 6 dB); for "quieter" or "louder" move it one step. ' +
         'note: a few words for the pane that say what you changed. Reply to the user in one short line.',
@@ -278,7 +278,7 @@ export function register(on) {
           next: { type: 'boolean', description: 'Move to the next part of the track' },
           track: { enum: ['next', 'previous'], description: 'Mix into the next track now, or go back to the previous one' },
           bpm: { type: 'integer', minimum: BPM_MIN, maximum: BPM_MAX },
-          mood: { enum: VIBES.map((v) => v.name) },
+          style: { enum: STYLES.map((v) => v.name) },
           energy: { type: 'integer', minimum: 0, maximum: 4 },
           swing: { type: 'integer', minimum: 0, maximum: 3, description: '0 straight, 3 most shuffle on hats and percussion' },
           transpose: { type: 'integer', minimum: 0, maximum: 11, description: 'Semitones up from the phrase key' },
@@ -330,7 +330,7 @@ export function register(on) {
     if (e.track === 'previous') { await cmd($, { op: 'prev' }); done.push('back to the previous track') }
     if (e.next) { await cmd($, { op: 'next' }); done.push('next part') }
     const jam = { op: 'jam', note: e.note }
-    for (const k of ['mood', 'bpm', 'energy', 'swing', 'transpose', 'dice', 'layers']) if (e[k] !== undefined) jam[k] = e[k]
+    for (const k of ['style', 'bpm', 'energy', 'swing', 'transpose', 'dice', 'layers']) if (e[k] !== undefined) jam[k] = e[k]
     if (Object.keys(jam).length > 2) { await cmd($, jam); done.push('changed ' + Object.keys(jam).filter((k) => k !== 'op' && k !== 'note').join(', ')) }
     if (typeof e.auto === 'boolean') { await cmd($, { op: 'auto', on: e.auto }); done.push('auto ' + (e.auto ? 'on' : 'off')) }
     if (typeof e.favorite === 'boolean' && s.ps && s.ps.fav !== e.favorite) { await cmd($, { op: 'fav' }); done.push(e.favorite ? 'added to favorites' : 'removed from favorites') }
@@ -421,7 +421,7 @@ export function register(on) {
       crate: (() => {
         const classics = Array.from({ length: 4 }, (_, i) => CLASSICS[(s.classicTurn * 4 + i) % CLASSICS.length])
         const ex = trackFor(classics[0])
-        return { chats: ps?.chats ?? [], classics, example: { phrase: ex.phrase, mood: moodName(ex), bpm: ex.bpm }, now }
+        return { chats: ps?.chats ?? [], classics, example: { phrase: ex.phrase, mood: styleName(ex), bpm: ex.bpm }, now }
       })(),
       update: s.update,
       gridEl: rows.length ? ui.Client({ key: 'grid', module: './grid.client.js', props: { rows, step, stepMs: ps?.stepMs || 115, playing: looping, stamp: ps?.barStartedAt ?? 0 } }) : null,
@@ -437,7 +437,7 @@ export function register(on) {
       fav: go({ op: 'fav' }),
       volume: (level) => cmd($, { op: 'volume', level }),
       toggleFav: (code) => cmd($, { op: 'fav', code }),
-      mood: (name) => cmd($, { op: 'jam', mood: name }),
+      style: (name) => cmd($, { op: 'jam', style: name }),
       dice: go({ op: 'dice' }),
       undo: go({ op: 'undo' }),
       bpm: (d) => cmd($, { op: 'jam', bpm: Math.max(BPM_MIN, Math.min(BPM_MAX, (v?.bpm ?? 128) + d)) }),

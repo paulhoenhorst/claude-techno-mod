@@ -41,8 +41,11 @@ export function loopSpec(set, { auto }) {
   const rise = !!fx && last && fx.build[k] !== undefined
   const drop = p.section === 'drop' && set.loop === 0
   const landed = !!set.swapped && set.loop === 0
+  // a key change from transitionsOf: this loop plays transposed. Not only
+  // with auto: it belongs to the part, so "next part" reaches it by hand too.
+  const shift = transitionsOf(set.track).key[k]
   return {
-    track: set.track,
+    track: shift ? { ...set.track, transpose: (set.track.transpose + shift) % 12 } : set.track,
     with: null,
     rise,
     impact: drop || landed,
@@ -84,12 +87,15 @@ export function stepOn(set, nextTrack) {
   const shape = transitionsOf(set.track).land
   set.handover = { from: set.track, step: 0, loop: 0, shape }
   set.track = { ...atPart(next, HANDOVERS[shape].to), bpm: set.track.bpm }
+  // the new song mixes in at the old tempo, then glides to its own
+  set.bpmTo = next.bpm !== set.track.bpm ? next.bpm : null
   return set
 }
 
 // After a loop played to its end: with auto, count it and move on when the
 // part (or the handover step) has had its loops.
 export function afterLoop(set, { auto, nextTrack }) {
+  glide(set)
   if (!auto) return set
   if (set.handover) {
     set.handover.loop++
@@ -100,6 +106,20 @@ export function afterLoop(set, { auto, nextTrack }) {
   if (set.loop >= PLAN[set.track.part].loops) stepOn(set, nextTrack)
   return set
 }
+
+// After the handover, the tempo moves GLIDE bpm a loop toward the new song's
+// own (0.10: a hard song at 148 and a minimal one at 125 both keep their
+// tempo; 2 bpm at a loop's edge is not heard as a jump).
+export const GLIDE = 2
+function glide(set) {
+  if (!set.bpmTo || set.handover) return
+  const d = set.bpmTo - set.track.bpm
+  set.track = { ...set.track, bpm: set.track.bpm + Math.sign(d) * Math.min(GLIDE, Math.abs(d)) }
+  if (set.track.bpm === set.bpmTo) set.bpmTo = null
+}
+
+// The track as it is meant to be: at its own tempo while the tempo still glides.
+export const homeOf = (set) => (set.bpmTo ? { ...set.track, bpm: set.bpmTo } : set.track)
 
 // How many loops are left in this part (or handover step), this one included.
 export function loopsLeft(set) {

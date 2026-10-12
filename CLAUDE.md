@@ -1,6 +1,6 @@
 # techno (Claude Code mod)
 
-A Claude Code mod. A phrase grows a techno track: a long set of about seven
+A Claude Code mod. A phrase grows a dark techno track (minimal, deep or dark): a long set of about seven
 minutes (intro, groove, build, three drops with breakdowns between them, an
 outro) that mixes by itself into the next track, layer by layer. One
 background player makes the music for every chat; the band above the chat box
@@ -30,10 +30,10 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 | `hooks/conductor.js` | Pure: what each loop of a set plays (`loopSpec`), how auto moves on (`afterLoop`, `stepOn`), and the `mixer` that cuts loops into bars and carries the tails. Shared by the player and the scripts. |
 | `player/techno.mjs` | The background player (node). Owns the set, auto, favorites, history and undo; renders a loop ahead and feeds bars to the helper; answers chats on a Unix socket (`GET /state`, `POST /cmd`). |
 | `player/TechnoPlayer.swift` | The helper app: plays the bars gaplessly (AVAudioSourceNode), shows "Now Playing" in Control Center, passes the media keys back. The player compiles it with `swiftc` into `~/Library/Caches/techno/TechnoPlayer.app` when the source changes. |
-| `scripts/set.mjs` | Render a whole auto set with the handover to a WAV, and print each loop with its transitions: `node scripts/set.mjs "ship it" "warehouse 4am" out.wav`. |
+| `scripts/set.mjs` | Render a whole auto set with the handover to a WAV, and print each loop with its bpm, key and transitions: `node scripts/set.mjs "ship it" "warehouse 4am" out.wav`. |
 | `scripts/render.mjs` | Render one loop to a WAV: `node scripts/render.mjs "phrase" out.wav [repeats]`. |
 | `scripts/buildups.mjs` | Render the build into drop 1 once per build-up pack (`0-now`, `1-riser`, `2-filter`, `3-echo`) to compare them: `node scripts/buildups.mjs "late night deploy" previews/buildups`. |
-| `scripts/smoke.mjs` | Fast node checks: version match, every part renders, the handover renders, every build, fall and the swell render. |
+| `scripts/smoke.mjs` | Fast node checks: version match, every part renders, the handover renders, every build, fall and the swell render, every style renders and keeps a dark pad. |
 | `tests/techno.test.ts` | Real tests for `claude plugin test`, against a fake player on the socket. |
 | `player/bin/TechnoPlayer` | The prebuilt helper: one universal binary (arm64 and x86_64, ad-hoc signed), so a new user needs no Xcode tools. `TechnoPlayer.sha1` beside it is the sha1 of the Swift source it came from. |
 | `scripts/build-helper.mjs` | Builds `player/bin/` from `TechnoPlayer.swift`. Run it after every change to the Swift file; smoke fails until you do. |
@@ -44,6 +44,46 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 | `scripts/readme-media/film-audio.mjs` | The audio of the launch film: a montage of real loops of one auto set ("deep focus" into "ship it"), cut on bar lines, the engine's own voice lines with the music dipped under them, and `film.json` (every bar). The film itself is the `TechnoLaunch` composition in `~/Documents/video-studio`. |
 
 ## Decisions
+
+### 0.10 styles (Ruslan, 2026-10-12)
+
+- **Only dark** ("i want my techno to ONLY be dark ... all tracks honestly
+  feel too much the same ... diversify all instruments"). Every new song
+  (`trackFor`) gets a style, mood 0 or 1 and a dark scale (minor, phrygian,
+  harmonic). The moods sad and mysterious are gone from the deck and the
+  jam tool; an old share code (no `y`) keeps its mood and plays bit for
+  bit as before (checked against the 0.9.11 engine).
+- **Three styles: minimal, deep, dark** (`STYLES` in engine.js). Hard was
+  built and dropped ("i DON'T like HARD"), industrial too ("let's remove
+  industrial, just deep and dark"; picked "deep, dark, minimal" over "only
+  deep and dark" and "remove industrial only"). A style sets the tempo
+  (minimal 124-127, deep 122-127, dark 130-136), the energy lift, swing,
+  the sounds it picks from, the bass patterns, layers it adds or drops
+  (minimal: no rumble or ride, perc early; deep: pad and rumble early, no
+  ride), the room, the echo and a gain so all sit within about 1.5 LU
+  (-13 to -14 LUFS a drop; dark with a hypnotic line about -11.7).
+- **Leads come by themselves** (`LEADS`, `leadOf`): hypnotic and acid are
+  no buttons. The phrase picks none, a hypnotic line (a soft loop over 3,
+  5 or 7 steps against the bar, from the second groove on) or a 303 (from
+  the build on). Weights per style in `leads`.
+- **New sounds** (end of each `INSTRUMENTS` list, so old indexes hold):
+  kick distorted and click, bass pluck, hats shaker, clap industrial, perc
+  metal and wood. A style track keeps an explicit `%<layer>0`.
+- **Tonality**: a style song's drops walk a chord progression per bar
+  (`PROGRESSIONS`: the minor sixth, the minor seventh, the fourth, the
+  second). About half the songs change key (+1, +2, +5 or -2) for the last
+  breakdown and drop 3 (`transitionsOf(t).key`, applied in `loopSpec`, also
+  without auto, so "next part" reaches it by hand); the outro comes home.
+- **Tempo glide**: after a handover the new song plays at the old tempo,
+  then moves `GLIDE` (2) bpm a loop to its own (`set.bpmTo`, `homeOf`).
+  Favorites, history and the saved track keep the home tempo. A tempo you
+  set, or a style click, stops the glide.
+- **The deck**: the mood row is the style row (`styleLine` in views.js,
+  `style-<name>` keys); an old song lights no button. The view keeps `mood`
+  (the style's name) for chats still on 0.9.
+- Listen: `previews/styles-tour.mp3` (each style, with and without a lead)
+  and `previews/set-dark-into-deep.mp3` (gitignored). The deck itself was
+  not captured (no Screen Recording permission); the tests check it.
 
 ### 0.9.10 (Ruslan, 2026-10-08)
 
@@ -534,7 +574,10 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 
 ## Share code format
 
-`<phrase-with-hyphens>@<bpm>m<mood>e<energy>[d<dice>][s<swing>][t<transpose>][k<scale>][p<old part>|a<part>][+layer|-layer...][*<layer><on hex4><off hex4>...][%<layer><instrument>...][~<layer><16 degrees>...][^<layer><cut+3><grit>...][!<lp+3><hp><space+2>][/<plan in hex>]`
+`<phrase-with-hyphens>@<bpm>m<mood>e<energy>[d<dice>][s<swing>][t<transpose>][k<scale>][p<old part>|a<part>][+layer|-layer...][*<layer><on hex4><off hex4>...][%<layer><instrument>...][~<layer><16 degrees>...][^<layer><cut+3><grit>...][!<lp+3><hp><space+2>][/<plan in hex>][y<style>]`
+
+`y` is 0.10: the style (0 minimal, 1 deep, 2 dark). Without it the track
+is an old one and its mood decides.
 
 The fields after `*` are 0.9 (the edit card); see Decisions 0.9.
 

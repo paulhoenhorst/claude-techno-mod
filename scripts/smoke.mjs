@@ -4,7 +4,7 @@
 // `claude plugin test` is the real test of the mod.
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { trackFor, atPart, renderLoop, arrange, withVibe, PLAN, HANDOVERS, VIBES, BUILDS, FALLS, INSTRUMENTS, TONE_LAYERS, editTrack } from '../hooks/engine.js'
+import { trackFor, atPart, renderLoop, arrange, withVibe, withStyle, PLAN, HANDOVERS, VIBES, STYLES, BUILDS, FALLS, INSTRUMENTS, TONE_LAYERS, editTrack } from '../hooks/engine.js'
 import { newSet, loopSpec, afterLoop } from '../hooks/conductor.js'
 
 const fail = (msg) => { console.error('FAIL', msg); process.exitCode = 1 }
@@ -76,5 +76,18 @@ for (const v of VIBES) {
     const bad = notes.map((n) => (n - notes[0]) % 12).filter((i) => i === 4 || i === 10 || i === 11)
     if (bad.length) fail(`${v.name}: a bright interval in the chord ${notes}`)
   }
+}
+// every style renders its build and its drop, loud enough and never clipped,
+// and its pad stays dark
+for (const st of STYLES) {
+  const t = withStyle(trackFor('style check'), st.name)
+  for (const [part, opts] of [[4, { rise: true, build: 'riser' }], [7, { impact: true, build: 'filter' }], [6, {}]]) {
+    const r = renderLoop(atPart(t, part), opts)
+    let peak = 0
+    for (const y of r.left) peak = Math.max(peak, Math.abs(y))
+    if (!(peak > 0.1 && peak <= 0.9)) fail(`${st.name} part ${part} peak ${peak}`)
+  }
+  const pad = arrange(atPart(t, 6)).events.pad[0].notes
+  if (pad.some((n) => [4, 10, 11].includes((n - pad[0]) % 12))) fail(`${st.name}: a bright pad ${pad}`)
 }
 console.log(process.exitCode ? 'smoke: failed' : `smoke: ok (v${plugin})`)

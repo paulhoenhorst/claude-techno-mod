@@ -70,14 +70,14 @@ function persist() {
   st.rev++
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    const data = { auto: st.auto, playlist: st.playlist, favorites: st.favorites, history: st.history.slice(-30), pool: st.pool.slice(-40), chatsPlayed: st.chatsPlayed.slice(-200), classicsPlayed: st.classicsPlayed, sinceClassic: st.sinceClassic, imported: st.imported, volume: st.volume, track: E.encodeCode(cursor.set.track) }
+    const data = { auto: st.auto, playlist: st.playlist, favorites: st.favorites, history: st.history.slice(-30), pool: st.pool.slice(-40), chatsPlayed: st.chatsPlayed.slice(-200), classicsPlayed: st.classicsPlayed, sinceClassic: st.sinceClassic, imported: st.imported, volume: st.volume, track: E.encodeCode(C.homeOf(cursor.set)) }
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 1))
   }, 400)
 }
 
 // A track's identity, without the part: what a favorite or the history keeps.
 const idOf = (t) => E.encodeCode({ ...E.cleanTrack(t), part: null })
-const labelOf = (t) => ({ code: idOf(t), label: t.phrase, mood: E.moodName(t), bpm: t.bpm })
+const labelOf = (t) => ({ code: idOf(t), label: t.phrase, mood: E.styleName(t), bpm: t.bpm })
 
 // ---------- the helper app ----------
 
@@ -197,9 +197,12 @@ function viewOf(set, bar, spec) {
   const nextPart = h ? null : E.PLAN[plan[at + 1]]
   return {
     code: E.encodeCode(shown),
-    id: idOf(set.track),
+    id: idOf(C.homeOf(set)),
     phrase: set.track.phrase,
-    mood: E.moodName(set.track),
+    // `mood` is the word the pane shows (an old chat reads it too); `style`
+    // lights its button, null for an old song
+    mood: E.styleName(set.track),
+    style: set.track.style == null ? null : E.styleName(set.track),
     bpm: set.track.bpm,
     part: h ? null : set.track.part,
     section: h ? 'handover' : p.section,
@@ -445,7 +448,7 @@ function remember(t) {
 }
 
 function takeNext() {
-  remember(cursor.set.track)
+  remember(C.homeOf(cursor.set))
   const t = peekNext()
   played(t.phrase)
   return t
@@ -481,7 +484,12 @@ function prev() {
 
 const target = (set) => set.track
 function changeTrack(fn) {
-  edit((set) => { set.track = E.cleanTrack(fn({ ...target(set), layers: { ...target(set).layers }, steps: { ...target(set).steps } })) })
+  edit((set) => {
+    const was = set.track.bpm
+    set.track = E.cleanTrack(fn({ ...target(set), layers: { ...target(set).layers }, steps: { ...target(set).steps } }))
+    // a tempo you set (or a style's) wins over the glide after a handover
+    if (set.track.bpm !== was) set.bpmTo = null
+  })
 }
 
 // The song tab: remove a part, add a suggested one, or go back to the plan
@@ -543,7 +551,7 @@ function command(c) {
     }
     case 'jam': changeTrack((t) => {
       let x = t
-      if (c.mood) x = E.withVibe(x, c.mood)
+      if (c.style) x = E.withStyle(x, c.style)
       for (const k of ['bpm', 'energy', 'swing', 'transpose']) if (c[k] !== undefined) x[k] = c[k]
       if (c.dice) x.dice = (x.dice + 1) % 1000
       for (const [name, v] of Object.entries(c.layers ?? {})) {
@@ -635,7 +643,7 @@ function quit(why) {
   quitting = true
   log('quit: ' + why)
   clearTimeout(saveTimer)
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify({ auto: st.auto, playlist: st.playlist, favorites: st.favorites, history: st.history.slice(-30), pool: st.pool.slice(-40), chatsPlayed: st.chatsPlayed.slice(-200), classicsPlayed: st.classicsPlayed, sinceClassic: st.sinceClassic, imported: st.imported, volume: st.volume, track: E.encodeCode(cursor.set.track) }, null, 1)) } catch { /* best effort */ }
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify({ auto: st.auto, playlist: st.playlist, favorites: st.favorites, history: st.history.slice(-30), pool: st.pool.slice(-40), chatsPlayed: st.chatsPlayed.slice(-200), classicsPlayed: st.classicsPlayed, sinceClassic: st.sinceClassic, imported: st.imported, volume: st.volume, track: E.encodeCode(C.homeOf(cursor.set)) }, null, 1)) } catch { /* best effort */ }
   send({ op: 'quit' })
   server.close()
   try { fs.unlinkSync(SOCK) } catch { /* gone */ }

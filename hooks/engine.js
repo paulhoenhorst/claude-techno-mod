@@ -44,6 +44,77 @@ export function withVibe(input, name) {
   return { ...t, mood: v.mood, scale: v.scale, bpm: v.bpm, energy }
 }
 const scaleOf = (t) => t.scale ?? (t.mood === 0 ? 2 : t.mood >= 3 ? 1 : 0)
+
+// The styles (Ruslan, 2026-10-12: "i want my techno to ONLY be dark ... all
+// tracks honestly feel too much the same ... some more minimal"; then no
+// hard, no industrial: "just deep and dark", and minimal stays). Every new
+// track is dark: mood 0 or 1 and a dark scale (minor, phrygian, harmonic).
+// The style sets the rest: the tempo, how hard every part hits (`lift`), the
+// swing, the sounds it picks from (indexes into INSTRUMENTS, the phrase
+// picks one), the bass patterns, the layers it adds or drops, its mix, and
+// the lead lines it may bring. A track with `style: null` is an old code
+// and plays as it always did. `y<n>` in the share code.
+//   adds    layer -> the PLAN parts it plays in, on top of the plan
+//   drops   layers it never plays
+//   leads   weights of none, hypnotic, acid (see LEADS)
+//   room    the reverb size; `echo` more of the ping-pong on perc and acid
+//   gain    the level into the master's soft clip, so every style sits
+//           at about the same loudness
+export const STYLES = [
+  { name: 'minimal', bpm: [124, 127], mood: 1, lift: -1, scales: [0, 2], swing: [1, 2], kick: [5, 1], bass: [4], hats: [0, 3, 4], clap: [1], perc: [5, 1, 3], bassPatterns: [0, 4, 5], drops: ['rumble', 'ride'], adds: { perc: [2, 3] }, leads: [3, 1, 0], room: 0.72, echo: 1.8, gain: 1.3 },
+  { name: 'deep', bpm: [122, 127], mood: 0, lift: -1, scales: [0, 2], swing: [0, 1], kick: [2, 0], bass: [1, 0], hats: [3, 1], clap: [0], perc: [1, 3], bassPatterns: [0, 1, 4], drops: ['ride'], adds: { pad: [3, 4], rumble: [1, 2] }, leads: [2, 2, 0], room: 0.92, echo: 1.7, gain: 1 },
+  { name: 'dark', bpm: [130, 136], mood: 0, lift: 1, scales: [2, 0, 4], swing: [0], kick: [0, 1], bass: [0, 2, 1], hats: [0, 2], clap: [0, 2], perc: [1, 2, 4], bassPatterns: [0, 1, 2, 3, 4, 5], drops: [], adds: {}, leads: [2, 1, 1], room: 0.86, echo: 1.2, gain: 0.95 },
+]
+// The lead lines a style may bring, picked by the phrase (Ruslan's answer
+// on 2026-10-12: hypnotic and acid are no buttons, they come by themselves):
+//   hypnotic  a soft line that loops over 3, 5 or 7 steps against the bar,
+//             from the second groove on, the breakdowns too
+//   acid      the 303, from the build on, alone in the second breakdown
+// Each sets the acid layer's sound (indexes into INSTRUMENTS.acid) and its
+// level (the hypnotic line plays on most steps, so it sits lower).
+export const LEADS = {
+  hypnotic: { parts: [3, 4, 5, 6, 7, 8, 9], acid: [2, 3], level: 0.5 },
+  acid: { parts: [4, 5, 7, 8, 9], acid: [0, 1], level: 0.85 },
+}
+const LEAD_NAMES = [null, 'hypnotic', 'acid']
+const styleOf = (t) => (t?.style === null || t?.style === undefined ? null : STYLES[t.style] ?? null)
+// The lead line of a style track (null: none), the same for a phrase and its style
+export function leadOf(t) {
+  const st = styleOf(t)
+  if (!st) return null
+  return weighted(rng(hash32('lead:' + t.phrase + ':' + t.style)), LEAD_NAMES, st.leads)
+}
+// What the pane calls the track's sound: its style, or the old mood
+export const styleName = (t) => styleOf(t)?.name ?? moodName(t)
+// The sound of each layer: an explicit pick wins, else the style's pick for
+// this phrase, else the phrase's own (index 0).
+export function instOf(t) {
+  const st = styleOf(t)
+  const r = rng(hash32('inst:' + t.phrase + ':' + t.style))
+  const out = {}
+  const lead = leadOf(t)
+  for (const name of Object.keys(INSTRUMENTS)) {
+    const own = !st ? 0 : name === 'acid' ? (lead ? pick(r, LEADS[lead].acid) : 0) : pick(r, st[name])
+    out[name] = t.inst?.[name] ?? own
+  }
+  return out
+}
+// The track in another style: its tempo, swing, scale and sounds (your own
+// sound picks go, since the style picks them), and the energy of its part.
+export function withStyle(input, name) {
+  const t = cleanTrack(input)
+  const i = STYLES.findIndex((it) => it.name === name)
+  return i < 0 ? t : styled(t, i)
+}
+// (no cleanTrack here: trackFor builds on it, and cleanTrack on trackFor)
+function styled(t, i) {
+  const st = STYLES[i]
+  const r = rng(hash32('style:' + t.phrase + ':' + i))
+  const bpm = st.bpm[0] + Math.floor(r() * (st.bpm[1] - st.bpm[0] + 1))
+  const scale = st.scales.includes(t.scale) ? t.scale : pick(r, st.scales)
+  const energy = t.part === null || t.part === undefined ? t.energy : clamp(PLAN[t.part].energy + st.lift, 0, 4)
+  return { ...t, style: i, mood: st.mood, scale, bpm, swing: pick(r, st.swing), energy, inst: {} }
+}
 const CHORDS = [[0, 3, 7, 12], [0, 3, 7, 10], [0, 3, 7, 10], [0, 3, 7, 10, 14], [0, 5, 7, 10, 14]]
 export const BARS = 8
 export const STEPS = 16
@@ -59,11 +130,11 @@ export const GRID_LAYERS = ['kick', 'hats', 'bass', 'perc', 'clap', 'ride', 'aci
 // master filters. Index 0 is always the sound the phrase gives (for perc,
 // the phrase's own pick of rim, tom or bell).
 export const INSTRUMENTS = {
-  kick: ['deep', 'punchy', 'boom', 'hard'],
-  bass: ['rolling', 'sub', 'growl', 'acid'],
-  hats: ['tight', 'long', 'metal', 'dusty'],
-  clap: ['room', 'snap', 'snare'],
-  perc: ['phrase', 'rim', 'tom', 'bell'],
+  kick: ['deep', 'punchy', 'boom', 'hard', 'distorted', 'click'],
+  bass: ['rolling', 'sub', 'growl', 'acid', 'pluck'],
+  hats: ['tight', 'long', 'metal', 'dusty', 'shaker'],
+  clap: ['room', 'snap', 'snare', 'industrial'],
+  perc: ['phrase', 'rim', 'tom', 'bell', 'metal', 'wood'],
   acid: ['acid', 'square', 'pluck', 'soft'],
 }
 // Patterns to try, one bar of 16 steps. A pick becomes step edits, so it
@@ -197,7 +268,7 @@ export function transitionsOf(input) {
   const at = (k) => PLAN[plan[k]]
   // keyed by the position in the track's plan; a build goes on the part
   // right before a drop, a fall on the last loop of a drop
-  const out = { build: {}, fall: {}, swell: {}, swap: null, land: 'kick' }
+  const out = { build: {}, fall: {}, swell: {}, swap: null, land: 'kick', key: {} }
   let last = null
   const rises = plan.map((_, k) => (at(k).section !== 'drop' && at(k + 1)?.section === 'drop' ? k : -1)).filter((k) => k >= 0)
   for (const k of rises) {
@@ -209,6 +280,17 @@ export function transitionsOf(input) {
   plan.forEach((_, k) => { if (at(k + 1)?.adds && !rises.includes(k) && at(k).section !== 'drop' && at(k).section !== 'break') out.swell[k] = r() < 0.6 })
   out.swap = weighted(r, BUILDS, BUILD_WEIGHTS[mood], [out.build[rises[rises.length - 1]]])
   out.land = weighted(r, ['kick', 'hats'], LAND_WEIGHTS[mood])
+  // a key change (0.10, style tracks only, about half of them): the last
+  // breakdown and the last drop move up a semitone, a tone or a fourth, or
+  // down a tone; the outro comes home, so the handover meets the home key
+  if (styleOf(t) && r() < 0.5) {
+    const shift = pick(r, [1, 2, 5, 10])
+    const last = plan.map((i) => PLAN[i].section).lastIndexOf('drop')
+    if (last > 0) {
+      out.key[last] = shift
+      if (at(last - 1).section === 'break') out.key[last - 1] = shift
+    }
+  }
   return out
 }
 
@@ -255,9 +337,10 @@ const toInt = (v, lo, hi, fallback) => (Number.isFinite(Number(v)) ? clamp(Math.
 export function trackFor(phrase) {
   const p = normalizePhrase(phrase) || 'techno'
   const r = rng(hash32('track:' + p))
-  const vibe = VIBES[Math.floor(r() * VIBES.length)]
-  const bpm = vibe.bpm + Math.floor(r() * 3) - 1
-  return { phrase: p, bpm, mood: vibe.mood, energy: 2, dice: 0, swing: 0, transpose: 0, scale: vibe.scale, part: null, layers: {}, steps: {}, inst: {}, notes: {}, tone: {}, master: [0, 0, 0] }
+  // every new track is dark; the phrase picks its style (0.10)
+  const style = Math.floor(r() * STYLES.length)
+  const base = { phrase: p, bpm: 130, mood: 0, energy: 2, dice: 0, swing: 0, transpose: 0, scale: null, part: null, layers: {}, steps: {}, inst: {}, notes: {}, tone: {}, master: [0, 0, 0], plan: null, style: null }
+  return styled(base, style)
 }
 
 // The track at a part of the build: the plan's energy, the plan's layers
@@ -265,7 +348,8 @@ export function trackFor(phrase) {
 export function atPart(input, part) {
   const t = cleanTrack(input)
   const p = clamp(part, 0, PLAN.length - 1)
-  return { ...t, part: p, energy: clamp(PLAN[p].energy + VIBES[vibeOf(t)].lift, 0, 4), layers: {} }
+  const lift = styleOf(t)?.lift ?? VIBES[vibeOf(t)].lift
+  return { ...t, part: p, energy: clamp(PLAN[p].energy + lift, 0, 4), layers: {} }
 }
 
 // Fills gaps and clamps every field, so a state from a code or a tool call is safe.
@@ -284,8 +368,15 @@ export function cleanTrack(t) {
     if (on || off) steps[name] = [on, off]
   }
   const part = t?.part === null || t?.part === undefined ? null : toInt(t.part, 0, PLAN.length - 1, null)
+  // a style track keeps an explicit 0 (the style would pick another sound)
+  const style = t?.style === null || t?.style === undefined ? null : toInt(t.style, 0, STYLES.length - 1, null)
   const inst = {}
-  for (const [name, list] of Object.entries(INSTRUMENTS)) { const v = toInt(t?.inst?.[name], 0, list.length - 1, 0); if (v) inst[name] = v }
+  for (const [name, list] of Object.entries(INSTRUMENTS)) {
+    const raw = t?.inst?.[name]
+    if (raw === undefined || raw === null) continue
+    const v = toInt(raw, 0, list.length - 1, 0)
+    if (v || style !== null) inst[name] = v
+  }
   const notes = {}
   for (const name of NOTE_LAYERS) { const v = t?.notes?.[name]; if (typeof v === 'string' && NOTE_RE.test(v) && /[^.]/.test(v)) notes[name] = v }
   const tone = {}
@@ -316,6 +407,7 @@ export function cleanTrack(t) {
     tone,
     master,
     plan,
+    style,
   }
 }
 
@@ -327,9 +419,12 @@ function character(t) {
 // Which layers play: an explicit on/off wins, otherwise mood and energy decide.
 export function activeLayers(t) {
   if (t.part !== null && t.part !== undefined) {
+    const st = styleOf(t)
     const plan = PLAN[t.part].layers
+    const lead = leadOf(t)
+    const inPlan = (name) => st ? !st.drops.includes(name) && (plan.includes(name) || !!st.adds[name]?.includes(t.part) || (name === 'acid' && !!lead && LEADS[lead].parts.includes(t.part))) : plan.includes(name)
     const out = {}
-    for (const name of LAYERS) out[name] = t.layers[name] ?? (plan.includes(name) && (name !== 'rumble' || t.mood <= 2))
+    for (const name of LAYERS) out[name] = t.layers[name] ?? (inPlan(name) && (name !== 'rumble' || t.mood <= 2))
     return out
   }
   const auto = {
@@ -363,7 +458,7 @@ export function keyName(t) {
 }
 
 export function describe(t) {
-  return `${t.bpm} bpm · key ${keyName(t)} · mood ${moodName(t)} · energy ${ENERGIES[t.energy]}`
+  return `${t.bpm} bpm · key ${keyName(t)} · ${styleOf(t) ? 'style ' + styleName(t) : 'mood ' + moodName(t)} · energy ${ENERGIES[t.energy]}`
 }
 
 // ---------- share codes ----------
@@ -381,17 +476,18 @@ export function encodeCode(t) {
   if (t.part !== null && t.part !== undefined) code += 'a' + t.part
   for (const name of LAYERS) if (name in t.layers) code += (t.layers[name] ? '+' : '-') + name
   for (const name of GRID_LAYERS) if (t.steps?.[name]) code += '*' + name + hex4(t.steps[name][0]) + hex4(t.steps[name][1])
-  for (const name of Object.keys(INSTRUMENTS)) if (t.inst?.[name]) code += '%' + name + t.inst[name]
+  for (const name of Object.keys(INSTRUMENTS)) if (t.inst?.[name] !== undefined && (t.inst[name] || styleOf(t))) code += '%' + name + t.inst[name]
   for (const name of NOTE_LAYERS) if (t.notes?.[name]) code += '~' + name + t.notes[name]
   for (const name of TONE_LAYERS) if (t.tone?.[name]) code += '^' + name + (t.tone[name][0] + 3) + t.tone[name][1]
   const m = t.master ?? [0, 0, 0]
   if (m[0] || m[1] || m[2]) code += '!' + (m[0] + 3) + m[1] + (m[2] + 2)
   if (t.plan) code += '/' + t.plan.map((i) => i.toString(16)).join('')
+  if (styleOf(t)) code += 'y' + t.style
   return code
 }
 const alt = (list) => '(?:' + list.join('|') + ')'
 const CODE_RE = new RegExp('^(\\d{2,3})(?:m([0-4]))?(?:e([0-4]))?(?:d(\\d{1,3}))?(?:s([0-3]))?(?:t(\\d{1,2}))?(?:k([0-4]))?(?:p(\\d))?(?:a(\\d{1,2}))?((?:[+-][a-z]+)*)((?:\\*[a-z]+[0-9a-f]{8})*)' +
-  '((?:%' + alt(Object.keys(INSTRUMENTS)) + '\\d)*)((?:~' + alt(NOTE_LAYERS) + '[.0-9a-e]{16})*)((?:\\^' + alt(TONE_LAYERS) + '[0-6][0-3])*)(?:!([0-3][0-3][0-4]))?(?:/([0-9a]{2,24}))?$')
+  '((?:%' + alt(Object.keys(INSTRUMENTS)) + '\\d)*)((?:~' + alt(NOTE_LAYERS) + '[.0-9a-e]{16})*)((?:\\^' + alt(TONE_LAYERS) + '[0-6][0-3])*)(?:!([0-3][0-3][0-4]))?(?:/([0-9a]{2,24}))?(?:y(\\d))?$')
 
 export function parseCode(text) {
   const s = String(text ?? '').trim().toLowerCase().replace(/^\/?techno\s+/, '')
@@ -416,7 +512,7 @@ export function parseCode(text) {
   for (const x of m[13].match(/~[a-z]+[.0-9a-e]{16}/g) ?? []) notes[x.slice(1, -16)] = x.slice(-16)
   for (const x of m[14].match(/\^[a-z]+\d\d/g) ?? []) tone[x.slice(1, -2)] = [Number(x.slice(-2, -1)) - 3, Number(x.slice(-1))]
   const master = m[15] ? [Number(m[15][0]) - 3, Number(m[15][1]), Number(m[15][2]) - 2] : [0, 0, 0]
-  return cleanTrack({ phrase: s.slice(0, at), bpm: m[1], mood: m[2], energy: m[3], dice: m[4], swing: m[5], transpose: m[6], scale: m[7] ?? null, part: m[9] ?? (m[8] === undefined ? null : OLD_PARTS[m[8]]), layers, steps, inst, notes, tone, master, plan: m[16] ? [...m[16]].map((c) => parseInt(c, 16)) : null })
+  return cleanTrack({ phrase: s.slice(0, at), bpm: m[1], mood: m[2], energy: m[3], dice: m[4], swing: m[5], transpose: m[6], scale: m[7] ?? null, part: m[9] ?? (m[8] === undefined ? null : OLD_PARTS[m[8]]), layers, steps, inst, notes, tone, master, plan: m[16] ? [...m[16]].map((c) => parseInt(c, 16)) : null, style: m[17] ?? null })
 }
 
 // ---------- the arrangement: what plays on each of the 128 steps ----------
@@ -424,6 +520,12 @@ export function parseCode(text) {
 const BASS_PATTERNS = ['..x...x...x...x.', '.xx..xx..xx..xx.', '..xx..xx..xx..xx', '.xxx.xxx.xxx.xxx', '..x..xx...x..xx.', '...x..x...x..x.x']
 const PERC_PATTERNS = ['.x..x.....x..x..', '...x..x....x..x.', 'x..x..x..x..x...', '.x.x...x.x...x..', '..x....x..x...x.']
 const STAB_PATTERNS = ['..x.......x.....', '...x......x.....', '..x..x....x.....', '.......x..x....x']
+// Where a style track's drops move, one scale degree per bar of the loop
+// (Ruslan, 2026-10-12: "maybe change tonality sometimes?"). The intro, the
+// groove and the breakdowns stay on the root; a drop walks one of these.
+// 5 is the minor sixth, 6 the minor seventh, 3 the fourth, 1 the second
+// (the flat second on phrygian, the darkest step).
+const PROGRESSIONS = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 5, 5], [0, 0, 0, 0, 5, 5, 6, 6], [0, 0, 3, 3, 0, 0, 5, 5], [0, 0, 0, 0, 1, 1, 0, 0], [0, 0, 6, 6, 5, 5, 0, 0]]
 const ACID_PALETTE = [0, 7, 0, 4, 0, 2, 0, 6, 0, 9, 3, 0, 4, 7, 0, 1, 0, 5, 0, 4, 2, 0, 7, 0, 6, 0, 3, 4, 0, 7, 2, 0, 9, 0, 4, 5]
 
 function charCode(ch) {
@@ -435,6 +537,8 @@ export function arrange(input) {
   const t = cleanTrack(input)
   const { keyClass } = character(t)
   const on = activeLayers(t)
+  const st = styleOf(t)
+  const inst = instOf(t)
   const r = rng(hash32('arr:' + t.phrase + ':' + t.dice))
   const scale = SCALES[scaleOf(t)].steps
   // the sub's root, e1..d#2: low enough to feel, the growl sits an octave up
@@ -448,20 +552,27 @@ export function arrange(input) {
   const chordShape = t.scale === null ? CHORDS[t.mood] : minorThird ? [0, 3, 7, 12] : [0, 7, 12]
   const degree = (d) => scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7)
 
-  const bassPattern = t.energy === 0 ? BASS_PATTERNS[0] : pick(r, BASS_PATTERNS)
+  const bassPick = pick(r, BASS_PATTERNS)
+  const bassPattern = t.energy === 0 ? BASS_PATTERNS[0] : st ? BASS_PATTERNS[st.bassPatterns[hash32('bp:' + t.phrase + ':' + t.dice) % st.bassPatterns.length]] : bassPick
   const bassIntervals = [0, 0, 12, 0, 0, 7, 0, 0].map((v) => (scale[1] === 1 && v === 7 ? 1 : v))
   const percPattern = pick(r, PERC_PATTERNS)
   const percPick = pick(r, ['rim', 'tom', 'bell'])
-  const percKind = t.inst.perc ? INSTRUMENTS.perc[t.inst.perc] : percPick
+  const percKind = inst.perc ? INSTRUMENTS.perc[inst.perc] : percPick
   const stabSlot = Math.floor(r() * STAB_PATTERNS.length)
   const kickGhost = t.energy >= 4 && r() < 0.6
+  // a style track's drop walks a progression; everything else holds the root
+  const isDrop = t.part !== null && t.part !== undefined && PLAN[t.part].section === 'drop'
+  const prog = st && isDrop ? PROGRESSIONS[hash32('prog:' + t.phrase + ':' + t.dice) % PROGRESSIONS.length] : null
+  const move = (bar) => (prog ? degree(prog[bar]) : 0)
+  // the hypnotic lead loops its line over 3, 5 or 7 steps against the bar
+  const cycle = leadOf(t) === 'hypnotic' ? [3, 5, 7][hash32('cyc:' + t.phrase + ':' + t.dice) % 3] : 0
 
   // The riff: one phrase character per step, so the phrase is the melody.
   // A space is a rest; a vowel is an accent.
   const chars = [...t.phrase]
   const offset = (t.dice * 3) % Math.max(1, chars.length)
   const riff = []
-  for (let i = 0; i < STEPS; i++) {
+  for (let i = 0; i < (cycle || STEPS); i++) {
     const ch = chars[(i + offset) % chars.length] ?? ' '
     if (ch === ' ') { riff.push(null); continue }
     const c = charCode(ch)
@@ -482,7 +593,7 @@ export function arrange(input) {
       if (s % 4 === 0 && !(last && s === 12 && t.energy <= 2)) ev.kick.push({ step, vel: 1 })
       if (kickGhost && s === 14 && bar % 2 === 1) ev.kick.push({ step, vel: 0.55 })
       // bass
-      if (bassPattern[s] === 'x') ev.bass.push({ step, note: root + bassIntervals[(s + bar) % bassIntervals.length], vel: s % 4 === 2 ? 1 : 0.8 })
+      if (bassPattern[s] === 'x') ev.bass.push({ step, note: root + move(bar) + (prog?.[bar] ? (bassIntervals[(s + bar) % bassIntervals.length] === 12 ? 12 : 0) : bassIntervals[(s + bar) % bassIntervals.length]), vel: s % 4 === 2 ? 1 : 0.8 })
       // hats: closed on the offbeat, then 8ths, then a ghost 16th, then 16ths; open hats from peak energy
       const open = (t.energy >= 3 || t.mood >= 4) && s % 4 === 2
       if (open) ev.hats.push({ step, vel: 0.9, open: true })
@@ -493,8 +604,8 @@ export function arrange(input) {
       // perc, with a fill in bar 4
       if (percPattern[s] === 'x' || (bar === 3 && s >= 12 && s % 2 === 1)) ev.perc.push({ step, vel: s % 3 === 0 ? 1 : 0.7, kind: percKind })
       // acid
-      const n = riff[s]
-      if (n) ev.acid.push({ step, ...n })
+      const n = cycle ? riff[step % cycle] : riff[s]
+      if (n) ev.acid.push({ step, ...n, note: n.note + move(bar) })
       // stab: the pattern shifts every other bar so the chords breathe
       const stabPattern = STAB_PATTERNS[(stabSlot + (bar % 2)) % STAB_PATTERNS.length]
       if (stabPattern[s] === 'x') ev.stab.push({ step, notes: chordShape.map((i) => root + 24 + i), vel: 1 })
@@ -525,7 +636,7 @@ export function arrange(input) {
     for (const e of ev[name]) { const c = line[e.step % STEPS]; if (c !== '.') e.note = base + degree(parseInt(c, 36)) }
   }
   for (const name of Object.keys(ev)) if (!on[name]) ev[name] = []
-  return { track: t, on, root, scale, events: ev, stepSeconds: 60 / t.bpm / 4, steps: BARS * STEPS, percKind, percPick }
+  return { track: t, on, root, scale, events: ev, stepSeconds: 60 / t.bpm / 4, steps: BARS * STEPS, percKind, percPick, inst, style: st }
 }
 
 // Adds or removes the hit at step `i` (0..15) of one layer, in every bar.
@@ -637,7 +748,7 @@ export function soundInfo(input, layer) {
   const a = arrange({ ...t, layers: { ...t.layers, [layer]: true } })
   const row = GRID_LAYERS.includes(layer) ? grid({ ...t, layers: { ...t.layers, [layer]: true } })[layer] ?? '.'.repeat(STEPS) : null
   const insts = INSTRUMENTS[layer] ? INSTRUMENTS[layer].map((name, i) => ({ name: layer === 'perc' && i === 0 ? null : name, value: i })).filter((x) => x.name) : []
-  const inst = layer === 'perc' ? a.percKind : INSTRUMENTS[layer]?.[t.inst[layer] ?? 0] ?? null
+  const inst = layer === 'perc' ? a.percKind : INSTRUMENTS[layer]?.[a.inst[layer] ?? 0] ?? null
   const presets = Object.entries(PATTERNS[layer] ?? {}).map(([name, p]) => ({ name, on: !!row && [...p].every((c, i) => (c === 'x') === (row[i] !== '.')) }))
   let notes = null
   if (NOTE_LAYERS.includes(layer)) {
@@ -727,14 +838,17 @@ function renderKick(buf, sr, at, vel, k, noise) {
   const len = Math.min(Math.round(Math.max(0.55, k.ampDecay * 2.4) * sr), buf.length - start)
   const fade = Math.round(0.04 * sr)
   const hp = svf(); hp.set(3500, sr, 0.7)
+  const lp = k.lp ? svf() : null
+  if (lp) lp.set(k.lp, sr, 0.8)
   let ph = 0
   for (let i = 0; i < len; i++) {
     const t = i / sr
-    const f = k.f1 + (k.f0 - k.f1) * Math.exp(-t / k.pitchDecay) + 260 * Math.exp(-t / 0.0045)
+    const f = k.f1 + (k.f0 - k.f1) * Math.exp(-t / k.pitchDecay) + (k.click ?? 260) * Math.exp(-t / 0.0045)
     ph += (TAU * f) / sr
     let amp = Math.exp(-t / k.ampDecay) * (0.75 + 0.25 * Math.exp(-t / 0.04))
     if (i > len - fade) amp *= (len - i) / fade
     let s = soft(Math.sin(ph) * amp * k.drive) * 0.95
+    if (lp) s = lp.run(s, 0) * 1.1
     if (t < 0.006) s += hp.run(noise(), 2) * 0.45 * (1 - t / 0.006)
     buf[start + i] += s * vel
   }
@@ -772,7 +886,8 @@ function renderBass(buf, sr, at, dur, midi, vel, cutoff, grit, noise, q = 0.8) {
 // real 909 instead of buzzing like a chip.
 const HAT_FREQS = [205.3, 304.4, 369.6, 522.7, 540, 800]
 // tight, long, metal, dusty
-const HAT_KINDS = [{ decay: 1, metal: 0.035, hp: 8200 }, { decay: 2.4, metal: 0.035, hp: 7600 }, { decay: 1.3, metal: 0.28, hp: 6500 }, { decay: 1.1, metal: 0.02, hp: 4200 }]
+// tight, long, metal, dusty, shaker (a slow attack, no metal)
+const HAT_KINDS = [{ decay: 1, metal: 0.035, hp: 8200 }, { decay: 2.4, metal: 0.035, hp: 7600 }, { decay: 1.3, metal: 0.28, hp: 6500 }, { decay: 1.1, metal: 0.02, hp: 4200 }, { decay: 1.9, metal: 0, hp: 5200, attack: 0.007 }]
 
 function renderHat(buf, sr, at, vel, open, tone, noise, v = HAT_KINDS[0]) {
   const start = Math.round(at * sr)
@@ -790,34 +905,39 @@ function renderHat(buf, sr, at, vel, open, tone, noise, v = HAT_KINDS[0]) {
       metal += phases[j] < 0.5 ? 1 : -1
     }
     const x = metal * v.metal + noise() * 0.9
-    const env = Math.min(1, t / 0.0008) * Math.exp(-t / decay)
+    const env = Math.min(1, t / (v.attack ?? 0.0008)) * Math.exp(-t / decay)
     const y = hp.run(x, 2)
     buf[start + i] += (y * 0.6 + bp.run(y, 1) * 0.8) * env * vel
   }
 }
 
-// room (the 909-ish clap), snap (short and higher), snare (a body under the noise)
+// room (the 909-ish clap), snap (short and higher), snare (a body under the
+// noise), industrial (a lower snare driven hard; no style picks it, the edit card does)
 function renderClap(buf, sr, at, vel, noise, kind = 0) {
   const start = Math.round(at * sr)
   const len = Math.min(Math.round(0.35 * sr), buf.length - start)
-  const bp = svf(); bp.set(kind === 1 ? 1700 : kind === 2 ? 1900 : 1050, sr, kind === 2 ? 0.8 : 1.5)
-  const tail = kind === 1 ? 0.04 : kind === 2 ? 0.13 : 0.11
+  const snare = kind === 2 || kind === 3
+  const bp = svf(); bp.set(kind === 1 ? 1700 : kind === 2 ? 1900 : kind === 3 ? 1300 : 1050, sr, kind === 3 ? 0.6 : kind === 2 ? 0.8 : 1.5)
+  const tail = kind === 1 ? 0.04 : kind === 2 ? 0.13 : kind === 3 ? 0.16 : 0.11
   let ph = 0
   for (let i = 0; i < len; i++) {
     const t = i / sr
     let env = 0
-    for (const o of kind === 2 ? [0] : [0, 0.011, 0.022]) if (t >= o) env = Math.max(env, Math.exp(-(t - o) / 0.0045))
-    if (t >= 0.03 || kind === 2) env = Math.max(env, 0.55 * Math.exp(-Math.max(0, t - (kind === 2 ? 0.004 : 0.03)) / tail))
+    for (const o of snare ? [0] : [0, 0.011, 0.022]) if (t >= o) env = Math.max(env, Math.exp(-(t - o) / 0.0045))
+    if (t >= 0.03 || snare) env = Math.max(env, 0.55 * Math.exp(-Math.max(0, t - (snare ? 0.004 : 0.03)) / tail))
     let x = bp.run(noise(), 1) * env * 2.2
-    if (kind === 2) { ph += (185 * (1 + 0.5 * Math.exp(-t / 0.01))) / sr; x += Math.sin(TAU * ph) * Math.exp(-t / 0.07) * 0.8 }
+    if (snare) { ph += ((kind === 3 ? 150 : 185) * (1 + 0.5 * Math.exp(-t / 0.01))) / sr; x += Math.sin(TAU * ph) * Math.exp(-t / 0.07) * 0.8 }
+    if (kind === 3) x = Math.tanh(x * 2.6) * 0.75
     buf[start + i] += x * vel
   }
 }
 
 function renderPerc(buf, sr, at, vel, kind, pitch, noise) {
   const start = Math.round(at * sr)
-  const len = Math.min(Math.round((kind === 'tom' ? 0.3 : 0.12) * sr), buf.length - start)
-  let ph = 0, ph2 = 0
+  const len = Math.min(Math.round((kind === 'tom' || kind === 'metal' ? 0.3 : 0.12) * sr), buf.length - start)
+  const hp = kind === 'metal' ? svf() : null
+  if (hp) hp.set(700, sr, 0.7)
+  let ph = 0, ph2 = 0, ph3 = 0
   for (let i = 0; i < len; i++) {
     const t = i / sr
     let s
@@ -825,6 +945,15 @@ function renderPerc(buf, sr, at, vel, kind, pitch, noise) {
       const f = pitch * (1 + 0.8 * Math.exp(-t / 0.02))
       ph += f / sr
       s = Math.sin(TAU * ph) * Math.exp(-t / 0.09)
+    } else if (kind === 'metal') {
+      // an inharmonic clang: a sine through two detuned modulators, high-passed
+      ph += (pitch * 3.1) / sr; ph2 += (pitch * 3.1 * 1.414) / sr; ph3 += (pitch * 3.1 * 2.76) / sr
+      const m = 2.2 * Math.exp(-t / 0.05)
+      s = hp.run(Math.sin(TAU * ph + m * Math.sin(TAU * ph2) + 0.8 * m * Math.sin(TAU * ph3)) + noise() * 0.25 * Math.exp(-t / 0.006), 2) * Math.exp(-t / 0.07) * 0.8
+    } else if (kind === 'wood') {
+      // a woodblock: a high sine that dies at once, with a hollow overtone
+      ph += (pitch * 5.5) / sr; ph2 += (pitch * 5.5 * 2.3) / sr
+      s = (Math.sin(TAU * ph) + 0.3 * Math.sin(TAU * ph2) * Math.exp(-t / 0.006)) * Math.exp(-t / 0.022)
     } else if (kind === 'bell') {
       ph += (pitch * 4) / sr; ph2 += (pitch * 4 * 1.48) / sr
       s = Math.sin(TAU * ph + 1.5 * Math.sin(TAU * ph2)) * Math.exp(-t / 0.045) * 0.7
@@ -865,7 +994,7 @@ function renderAcid(buf, sr, a, total, sweep) {
   let ph = 0, freq = 110, target = 110, env = 0, amp = 0, accentAmt = 0
   let y1 = 0, y2 = 0, y3 = 0, y4 = 0
   // acid, square, pluck, soft
-  const kind = t.inst?.acid ?? 0
+  const kind = a.inst.acid
   const res = (0.55 + 0.08 * t.energy + (t.mood <= 1 ? 0.08 : 0)) * [1, 0.85, 0.6, 0.3][kind]
   const fb = res * 3.6
   const decay = (0.12 + 0.05 * t.mood) * [1, 1, 0.35, 1.6][kind]
@@ -1157,7 +1286,12 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
   while (tail >= 56) tail /= 2
   const k0 = { f0: 140 + r() * 40, f1: tail, pitchDecay: 0.04 + r() * 0.015, ampDecay: 0.24 + r() * 0.06, drive: 1.9 + t.energy * 0.3 }
   // deep, punchy, boom, hard
-  const k = [k0, { ...k0, f0: k0.f0 * 1.25, ampDecay: k0.ampDecay * 0.6, drive: k0.drive + 0.6 }, { ...k0, ampDecay: k0.ampDecay * 1.7, pitchDecay: k0.pitchDecay * 1.5, drive: k0.drive * 0.85 }, { ...k0, drive: k0.drive * 2, ampDecay: k0.ampDecay * 0.85 }][t.inst.kick ?? 0]
+  // deep, punchy, boom, hard, distorted (clipped, long, rounded off by a
+  // low-pass; no style picks it, the edit card does), click (the minimal
+  // style: short and tight)
+  const k = [k0, { ...k0, f0: k0.f0 * 1.25, ampDecay: k0.ampDecay * 0.6, drive: k0.drive + 0.6 }, { ...k0, ampDecay: k0.ampDecay * 1.7, pitchDecay: k0.pitchDecay * 1.5, drive: k0.drive * 0.85 }, { ...k0, drive: k0.drive * 2, ampDecay: k0.ampDecay * 0.85 },
+    { ...k0, f0: k0.f0 * 1.35, pitchDecay: k0.pitchDecay * 0.8, ampDecay: k0.ampDecay * 1.45, drive: k0.drive * 3.2, lp: 3200, click: 420 },
+    { ...k0, f0: k0.f0 * 1.1, pitchDecay: k0.pitchDecay * 0.6, ampDecay: k0.ampDecay * 0.5, drive: k0.drive * 0.9, click: 520 }][a.inst.kick]
   const kickHit = template(sr, Math.max(0.55, k.ampDecay * 2.4), (b) => renderKick(b, sr, 0, 1, k, noise))
   for (const e of kicks) stamp(kick, kickHit, stepAt(e.step, false), e.vel, sr)
 
@@ -1167,18 +1301,19 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
   const bassAt = a.events.bass.map((e) => e.step)
   a.events.bass.forEach((e, i) => {
     const gap = ((bassAt[(i + 1) % bassAt.length] - e.step + a.steps - 1) % a.steps) + 1
-    // rolling, sub, growl, acid
-    const bv = [[1, 1, 0.8], [1, 0.12, 0.7], [1.6, 1.7, 0.8], [2.3, 1.1, 2.6]][t.inst.bass ?? 0]
-    renderBass(bass, sr, stepAt(e.step, false), a.stepSeconds * Math.min(2, gap) * 0.9, e.note, e.vel, bassCut * bv[0], bassGrit * bv[1], noise, bv[2])
+    // rolling, sub, growl, acid, pluck (short, for the minimal style)
+    const kind = a.inst.bass
+    const bv = [[1, 1, 0.8], [1, 0.12, 0.7], [1.6, 1.7, 0.8], [2.3, 1.1, 2.6], [2.6, 0.9, 1.3]][kind]
+    renderBass(bass, sr, stepAt(e.step, false), a.stepSeconds * (kind === 4 ? 0.7 : Math.min(2, gap) * 0.9), e.note, e.vel, bassCut * bv[0], bassGrit * bv[1], noise, bv[2])
   })
 
   const hatTone = 1.1 + r() * 0.5
   // two closed hats that alternate, so a run of 16ths does not sound like a machine gun
-  const hatKind = HAT_KINDS[t.inst.hats ?? 0]
+  const hatKind = HAT_KINDS[a.inst.hats]
   const closedHats = [0, 1].map(() => template(sr, 0.16 * hatKind.decay, (b) => renderHat(b, sr, 0, 1, false, hatTone, noise, hatKind)))
   const openHat = template(sr, 1.2 * hatKind.decay, (b) => renderHat(b, sr, 0, 1, true, hatTone, noise, hatKind))
   for (const e of a.events.hats) stamp(hats, e.open ? openHat : closedHats[e.step % 2], stepAt(e.step, true), e.vel, sr)
-  const clapHit = template(sr, 0.35, (b) => renderClap(b, sr, 0, 1, noise, t.inst.clap ?? 0))
+  const clapHit = template(sr, 0.35, (b) => renderClap(b, sr, 0, 1, noise, a.inst.clap))
   for (const e of a.events.clap) stamp(clap, clapHit, stepAt(e.step, false), e.vel, sr)
   // a clap roll into the drop: the 'riser' build speeds it up over four bars
   if (rise && build === 'riser') {
@@ -1250,9 +1385,10 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
 
   // sends
   const revIn = bus(), dlyIn = bus()
+  const echo = a.style?.echo ?? 1
   for (let i = 0; i < total; i++) {
     revIn[i] = clap[i] * 0.6 + perc[i] * 0.35 + stab[i] * 0.35 + hats[i] * 0.12 + acid[i] * 0.12 + voice[i] * 0.55 + ride[i] * 0.15 + pad[i] * 0.5 + fx[i] * 0.6
-    dlyIn[i] = stab[i] * 0.7 + acid[i] * 0.18 + perc[i] * 0.15 + voice[i] * 0.6
+    dlyIn[i] = stab[i] * 0.7 + (acid[i] * 0.18 + perc[i] * 0.15) * echo + voice[i] * 0.6
   }
   // the washout: the last bar sends far more into the reverb and the echo,
   // while the dry sound fades out under it
@@ -1263,7 +1399,7 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
     revIn[i] = (revIn[i] + kick[i] * 0.25 + hats[i] * 0.3 + bass[i] * 0.15) * (1 + 1.8 * u)
     dlyIn[i] = (dlyIn[i] + clap[i] * 0.5 + hats[i] * 0.3) * (1 + 1.5 * u)
   }
-  const room = 0.8 + (t.mood <= 1 ? 0.06 : 0)
+  const room = a.style?.room ?? 0.8 + (t.mood <= 1 ? 0.06 : 0)
   const [revL, revR] = reverb(revIn, revIn, sr, room, 0.35)
   // the master's space: more or less of the reverb
   if (t.master[2]) { const g = 1 + 0.45 * t.master[2]; for (let i = 0; i < total; i++) { revL[i] *= g; revR[i] *= g } }
@@ -1285,7 +1421,8 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
     if (t.tone.rumble) toneBus(rumL, sr, t.tone.rumble[0], t.tone.rumble[1])
   }
 
-  const levels = { kick: 0.9, bass: 1.05, hats: 0.4, clap: 0.7, perc: 0.22, acid: 0.45, stab: 0.75, ride: 0.16, pad: 1.2, fx: 0.32 }
+  const lead = leadOf(t)
+  const levels = { kick: 0.9, bass: 1.05, hats: 0.4, clap: 0.7, perc: 0.22, acid: 0.45 * (lead ? LEADS[lead].level : 1), stab: 0.75, ride: 0.16, pad: 1.2, fx: 0.32 }
   const left = new Float32Array(total), right = new Float32Array(total)
   for (let i = 0; i < total; i++) {
     const d = duck[i]
@@ -1344,6 +1481,9 @@ export function mixdown(input, { sampleRate = 44100, voices = null, rise = false
       pos += Math.pow(1 - u, 1.3)
     }
   }
+  // the style's level into the master
+  const gain = a.style?.gain ?? 1
+  if (gain !== 1) for (let i = 0; i < total; i++) { left[i] *= gain; right[i] *= gain }
   return { left, right, loop, total, sampleRate: sr, seconds: loopSeconds, stepSeconds: a.stepSeconds, master: t.master }
 }
 

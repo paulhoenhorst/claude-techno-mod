@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
-import { atPart, encodeCode, parseCode, toggleStep, trackFor, moodName, withVibe, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
-import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel } from '../hooks/conductor.js'
+import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
+import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE } from '../hooks/conductor.js'
 import { partBar } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
 
@@ -21,7 +21,7 @@ function fakePlayer() {
   const view = () => {
     const t = p.set.track
     const nx = PLAN[t.part + 1]
-    return { code: encodeCode(t), id: id(t), phrase: t.phrase, mood: moodName(t), bpm: t.bpm, part: t.part, section: PLAN[t.part].section, name: PLAN[t.part].name, from: null, next: nx ? { name: nx.name, adds: nx.adds, layer: nx.layer } : { name: 'the next track' }, bar: 0, loopsLeft: 1, at: posOf(p.set), plan: planOf(t) }
+    return { code: encodeCode(t), id: id(t), phrase: t.phrase, mood: styleName(t), style: t.style == null ? null : styleName(t), bpm: t.bpm, part: t.part, section: PLAN[t.part].section, name: PLAN[t.part].name, from: null, next: nx ? { name: nx.name, adds: nx.adds, layer: nx.layer } : { name: 'the next track' }, bar: 0, loopsLeft: 1, at: posOf(p.set), plan: planOf(t) }
   }
   const state = () => ({ version: '9.9.9', rev: p.rev, now: 0, playing: p.playing, auto: p.auto, playlist: null, view: view(), barStartedAt: 0, barMs: 1800, stepMs: 112, nextInMs: p.playing && p.auto ? 23000 : null, fav: p.favorites.some((f: any) => f.code === id(p.set.track)), favorites: p.favorites, recent: p.history.map((c: string) => ({ code: c, label: parseCode(c)!.phrase, mood: 'dark', bpm: 128 })), said: p.said, canUndo: false, volume: p.volume, chats: p.chats })
   p.command = (c: any) => {
@@ -36,12 +36,12 @@ function fakePlayer() {
     if (c.op === 'pick') { p.history.push(id(t)); p.set = newSet(atPart(parseCode(c.code) ?? trackFor(c.code), 0)); p.playing = true }
     if (c.op === 'prev' && p.history.length) p.set = newSet(atPart(parseCode(p.history.pop())!, 0))
     if (c.op === 'skip') { p.history.push(id(t)); p.set = newSet(atPart(trackFor('ship it'), 0)) }
-    if (c.op === 'jam' && c.mood) p.set.track = withVibe(t, c.mood)
+    if (c.op === 'jam' && c.style) p.set.track = withStyle(t, c.style)
     if (c.op === 'layer') p.set.track = { ...t, layers: { ...t.layers, [c.name]: !activeLayers(t)[c.name] } }
     if (c.op === 'step') p.set.track = toggleStep(t, c.layer, c.i)
     if (c.op === 'edit' && !String(c.kind).startsWith('plan')) p.set.track = editTrack(t, c)
     if (c.op === 'edit' && c.kind === 'plan-remove') p.set.track = { ...t, plan: planOf(t).filter((_: number, i: number) => i !== c.k) }
-    if (c.op === 'fav') p.favorites = p.favorites.some((f: any) => f.code === id(t)) ? [] : [{ code: id(t), label: t.phrase, mood: moodName(t), bpm: t.bpm }]
+    if (c.op === 'fav') p.favorites = p.favorites.some((f: any) => f.code === id(t)) ? [] : [{ code: id(t), label: t.phrase, mood: styleName(t), bpm: t.bpm }]
     return state()
   }
   p.state = state
@@ -95,9 +95,9 @@ test('a new chat says hello to the player with the project names and the tracks 
 test('the jam tool sends the change to the player and answers with the share line', async ($, on) => {
   const { player } = stubs(on)
   await start($)
-  const r = await $.tool.call({ tool: 'mcp__techno__jam', mood: 'dark', layers: { acid: true } })
-  expect(player.cmds.some((c: any) => c.op === 'jam' && c.mood === 'dark' && c.layers.acid === true)).toBe(true)
-  expect(String(r.result)).toContain('mood dark')
+  const r = await $.tool.call({ tool: 'mcp__techno__jam', style: 'deep', layers: { acid: true } })
+  expect(player.cmds.some((c: any) => c.op === 'jam' && c.style === 'deep' && c.layers.acid === true)).toBe(true)
+  expect(String(r.result)).toContain('style deep')
   expect(String(r.result)).toMatch(/Share line: \/techno late-night-deploy@/)
   await $.tool.call({ tool: 'mcp__techno__jam', track: 'previous' })
   expect(player.cmds.some((c: any) => c.op === 'prev')).toBe(true)
@@ -112,23 +112,25 @@ test('/techno <phrase> picks a track, /techno stop pauses, /techno code prints t
   expect(player.cmds.some((c: any) => c.op === 'pick' && c.code === 'late night deploy')).toBe(true)
   await $.command.run({ command: 'techno', args: 'stop' })
   expect(player.playing).toBe(false)
-  expect((await $.command.run({ command: 'techno', args: 'code' })).text).toMatch(/^\/techno late-night-deploy@\d{3}m\de\dk\da0$/)
+  expect((await $.command.run({ command: 'techno', args: 'code' })).text).toMatch(/^\/techno late-night-deploy@\d{3}m\de\d(s\d)?k\da0y\d$/)
 })
 
-test('the deck: play, the track and its mood, previous, favorite, auto; mood, next, edit, favorites under the grid', async ($, on) => {
+test('the deck: play, the track and its style, previous, favorite, auto; style, next, edit, favorites under the grid', async ($, on) => {
   const { player } = stubs(on)
   await start($)
   await $.command.run({ command: 'techno', args: '' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    for (const key of ['play', 'skip', 'fav', 'share', 'vol-mute', 'vol-down', 'vol-up', 'auto', 'where', 'grid', 'mood-sad', 'mood-mysterious', 'mood-dark', 'edit', 'favorites']) expect(await ui.find({ key })).toBeDefined()
+    for (const key of ['play', 'skip', 'fav', 'share', 'vol-mute', 'vol-down', 'vol-up', 'auto', 'where', 'grid', ...STYLES.map((st) => 'style-' + st.name), 'edit', 'favorites']) expect(await ui.find({ key })).toBeDefined()
+    // only dark: the moods are gone, the styles took their place
+    expect(await ui.find({ key: 'mood-sad' })).toBeUndefined()
     // auto is on: the set moves by itself, so there is no next part button
     expect(await ui.find({ key: 'next' })).toBeUndefined()
     expect((await ui.find({ key: 'auto' }))?.props.variant).toBe('primary')
-    // the mood that plays is the filled button, the others are not
-    const mood = moodName(player.set.track)
-    expect((await ui.find({ key: 'mood-' + mood }))?.props.variant).toBe('primary')
-    expect((await ui.find({ key: 'mood-' + ['sad', 'mysterious', 'dark'].find((m) => m !== mood) }))?.props.variant).toBeUndefined()
+    // the style that plays is the filled button, the others are not
+    const style = styleName(player.set.track)
+    expect((await ui.find({ key: 'style-' + style }))?.props.variant).toBe('primary')
+    expect((await ui.find({ key: 'style-' + STYLES.find((st) => st.name !== style)!.name }))?.props.variant).toBeUndefined()
     await ui.unmount()
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
@@ -157,7 +159,7 @@ test('the volume: vol − 80% +, beside the track; + new song; the tempo under t
   await start($)
   await $.command.run({ command: 'techno', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  // the mood and the tempo left the top line: the tempo sits in the bottom line
+  // the style and the tempo are not in the top line: the tempo sits under the part bar
   expect((await ui.find({ text: /^\d{3} bpm$/ }))?.text).toMatch(/^\d{3} bpm$/)
   expect(await ui.find({ text: /· dark · \d{3} bpm/ })).toBeUndefined()
   // one value in percent, − and + step it, vol mutes; no emoji
@@ -318,7 +320,7 @@ test('the handover takes the old track out layer by layer, and the new song star
 
 test('share codes: a<n> is the part, an old p<n> lands in the same section', () => {
   const t = atPart(trackFor('ruslan'), 7)
-  expect(encodeCode(t)).toMatch(/a7$/)
+  expect(encodeCode(t)).toMatch(/a7(y\d)?$/)
   expect(encodeCode(parseCode(encodeCode(t))!)).toBe(encodeCode(t))
   // old p8 was the drop, old p6 the peak, old p9 the outro
   expect(PLAN[parseCode('ruslan@130m1e2p8')!.part!].section).toBe('drop')
@@ -448,6 +450,9 @@ test('the edit actions: a pattern pick, a note up the scale, suggested notes, th
   const before = soundInfo(t, 'bass').notes
   const i = before.findIndex((n: string | null) => n)
   t = editTrack(t, { kind: 'note', layer: 'bass', i })
+  // one step up the scale (an octave note wraps to the root, the same name)
+  expect(t.notes.bass[i]).not.toBe('.')
+  t = editTrack(t, { kind: 'note', layer: 'bass', i })
   expect(soundInfo(t, 'bass').notes[i]).not.toBe(before[i])
   t = editTrack(t, { kind: 'suggest-notes', layer: 'acid', seed: 7 })
   for (const n of soundInfo(t, 'acid').notes.filter(Boolean)) expect(soundInfo(t, 'acid').scale).toContain(n)
@@ -481,7 +486,7 @@ test('new song: a name box with an example, then your recent chats and classics,
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.press({ key: 'new-song' })
   expect(await ui.find({ key: 'phrase' })).toBeDefined()
-  expect((await ui.find({ text: /type a name, get a song/ }))?.text).toMatch(/plays (sad|mysterious|dark), \d{3} bpm/)
+  expect((await ui.find({ text: /type a name, get a song/ }))?.text).toMatch(new RegExp(`plays (${STYLES.map((st) => st.name).join('|')}), \\d{3} bpm`))
   // the chats come first, 1 and 2, with the project and how long ago
   const first = await ui.find({ key: 'chat-social media content plan-play' })
   expect(first?.props.hotkey).toBe('1')
@@ -524,4 +529,81 @@ test('the same version on GitHub: no update notice', async ($, on) => {
   expect(await ui.find({ key: 'update-line' })).toBeUndefined()
   expect(await ui.find({ key: 'update' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('only dark: every new song has a style, a dark scale and its own tempo; old codes play as before', () => {
+  const names = Array.from({ length: 60 }, (_, n) => trackFor('song ' + n))
+  for (const t of names) {
+    expect(t.style).not.toBeNull()
+    const st = STYLES[t.style]
+    expect(['minor', 'phrygian', 'harmonic']).toContain(scaleName(t))
+    expect(t.mood).toBeLessThanOrEqual(1)
+    expect(t.bpm).toBeGreaterThanOrEqual(st.bpm[0])
+    expect(t.bpm).toBeLessThanOrEqual(st.bpm[1])
+    expect(parseCode(encodeCode(t))).toEqual(t)
+  }
+  // every style turns up: minimal, deep, dark; no hard, no industrial (Ruslan, 2026-10-12)
+  expect(new Set(names.map(styleName))).toEqual(new Set(['minimal', 'deep', 'dark']))
+  // the hypnotic line and the 303 come by themselves, in some songs
+  expect(new Set(names.map(leadOf))).toEqual(new Set([null, 'hypnotic', 'acid']))
+  // an old code has no style and keeps its mood
+  const old = parseCode('late-night-deploy@131m2e2d3a4')!
+  expect(old.style).toBeNull()
+  expect(styleName(old)).toBe('sad')
+  expect(encodeCode(old)).toBe('late-night-deploy@131m2e2d3a4')
+  // a style switch keeps the phrase and moves the tempo into the style
+  const min = withStyle(trackFor('ship it'), 'minimal')
+  expect(styleName(min)).toBe('minimal')
+  expect(min.bpm).toBeLessThanOrEqual(127)
+  // the style picks the sounds; an explicit pick of sound 0 stays in the code
+  expect(INSTRUMENTS.bass[instOf(min).bass]).toBe('pluck')
+  const picked = editTrack(min, { kind: 'inst', layer: 'bass', value: 0 })
+  expect(instOf(picked).bass).toBe(0)
+  expect(instOf(parseCode(encodeCode(picked))!).bass).toBe(0)
+  // minimal never plays the rumble; a lead plays where its parts say, not in the intro
+  expect(activeLayers(atPart(min, 5)).rumble).toBe(false)
+  for (const t of names.filter((x) => leadOf(x))) {
+    const lead = LEADS[leadOf(t)!]
+    expect(activeLayers(atPart(t, lead.parts[0])).acid).toBe(true)
+    expect(activeLayers(atPart(t, 0)).acid).toBe(false)
+  }
+})
+
+test('tonality: a drop walks its chords, some songs change key for the last breakdown and drop, auto glides the tempo', () => {
+  // a style song's drop moves the bass off the root in some bar; the groove holds it
+  const moving = Array.from({ length: 20 }, (_, n) => trackFor('song ' + n)).find((t) => {
+    const a = arrange(atPart(t, 5))
+    return new Set(a.events.bass.map((e: any) => e.note % 12)).size > 2
+  })!
+  expect(moving).toBeDefined()
+  const g = arrange(atPart(moving, 2))
+  expect(new Set(g.events.bass.filter((e: any) => e.note % 12 !== g.root % 12 && e.note % 12 !== (g.root + 7) % 12 && e.note % 12 !== (g.root + 1) % 12).map((e: any) => e.note)).size).toBe(0)
+  // the key change: the last breakdown and drop 3 move, the outro is home, with or without auto
+  const t = trackFor('warehouse 4am')
+  const fx = transitionsOf(t)
+  expect(fx.key[8]).toBe(2)
+  expect(fx.key[9]).toBe(2)
+  for (const auto of [true, false]) {
+    const set = newSet(atPart(t, 9))
+    expect(loopSpec(set, { auto }).track.transpose).toBe((t.transpose + 2) % 12)
+    set.track = atPart(t, 10); set.at = 10
+    expect(loopSpec(set, { auto }).track.transpose).toBe(t.transpose)
+  }
+  expect(Array.from({ length: 40 }, (_, n) => Object.keys(transitionsOf(trackFor('song ' + n)).key).length).filter((k) => k > 0).length).toBeGreaterThan(5)
+  // the glide: the new song mixes in at the old tempo, then moves GLIDE bpm a loop to its own
+  const deep = trackFor('cold sleep')
+  const set = newSet(atPart(t, PLAN.length - 1))
+  afterLoop(set, { auto: true, nextTrack: () => deep })
+  while (set.handover) afterLoop(set, { auto: true, nextTrack: () => deep })
+  expect(set.track.bpm).toBe(t.bpm)
+  expect(homeOf(set).bpm).toBe(deep.bpm)
+  let loops = 0
+  while (set.track.bpm !== deep.bpm && loops < 40) {
+    const was = set.track.bpm
+    afterLoop(set, { auto: true, nextTrack: () => deep })
+    expect(Math.abs(set.track.bpm - was)).toBeLessThanOrEqual(GLIDE)
+    loops++
+  }
+  expect(set.track.bpm).toBe(deep.bpm)
+  expect(set.bpmTo).toBe(null)
 })

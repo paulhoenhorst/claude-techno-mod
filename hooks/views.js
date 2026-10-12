@@ -5,16 +5,17 @@
 //
 // Layout A with the part bar (Ruslan, 2026-10-04): one line on top (previous,
 // play and next track side by side, the track, favorite, share, the volume;
-// auto and hide on the right), the part bar with the section, the mood and
-// the tempo, the grid, one line under it (mood, tempo, next part, edit, favorites), and the edit card
+// auto and hide on the right), the part bar with the section, the style and
+// the tempo, the grid, one line under it (new song, next part, edit, favorites), and the edit card
 // when edit is open.
 // Three screens: the deck, the favorites (with the tracks you heard), and new
 // tracks.
 //
-// A selected thing (the mood, auto on) is a filled primary button, not
+// A selected thing (the style, auto on) is a filled primary button, not
 // brighter text: dim against normal text cannot be read in the light theme.
 
 import { sectionLabel } from './conductor.js'
+import { STYLES } from './engine.js'
 
 const row = (ui, children, extra = {}) => ui.Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 1, alignItems: 'center', children: children.filter(Boolean), ...extra })
 const col = (ui, children, extra = {}) => ui.Box({ flexDirection: 'column', children: children.filter(Boolean), ...extra })
@@ -103,15 +104,18 @@ function whereLine(ui, vm) {
   ], { key: 'where', columnGap: 1 })
 }
 
-// The mood and the tempo, under the song's progress and over the grid
+// The style and the tempo, under the song's progress and over the grid
 // (Ruslan, 2026-10-05: "progress of the song ... under it the mood, then
-// the grid").
-function moodLine(ui, vm, act) {
+// the grid"). 0.10: every song is dark, so the moods (sad, mysterious,
+// dark) gave their place to the styles (Ruslan, 2026-10-12: "ONLY be dark
+// ... some tracks HARD techno, some more minimal"). An old song with no
+// style has no button lit.
+function styleLine(ui, vm, act) {
   return row(ui, [
-    dim(ui, 'mood'),
-    ...['sad', 'mysterious', 'dark'].map((name) => toggle(ui, 'mood-' + name, name, vm.view.mood === name, () => act.mood(name))),
+    dim(ui, 'style'),
+    ...STYLES.map(({ name }) => toggle(ui, 'style-' + name, name, vm.view.style === name, () => act.style(name))),
     dim(ui, vm.view.bpm + ' bpm', { key: 'bpm' }),
-  ], { key: 'mood' })
+  ], { key: 'style' })
 }
 
 function bottomLine(ui, vm, act) {
@@ -229,7 +233,7 @@ function deck(ui, vm, act) {
   return [
     topLine(ui, vm, act),
     whereLine(ui, vm),
-    moodLine(ui, vm, act),
+    styleLine(ui, vm, act),
     vm.gridEl,
     bottomLine(ui, vm, act),
     vm.editOpen ? editCard(ui, vm, act) : null,
