@@ -1,8 +1,10 @@
 import { expect, mock, test } from 'claude-code/testing'
-import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, keyName, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, EXTRAS, BASS_LINES, extrasOf, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
-import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE } from '../hooks/conductor.js'
+import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, keyName, noteName as noteNameOf, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, EXTRAS, BASS_LINES, extrasOf, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
+import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE, freshKey } from '../hooks/conductor.js'
 import { partBar } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
+
+const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
 
 // What Claude Code passes to the band's ui.render hook, apart from the app
 const PANE = {
@@ -541,8 +543,13 @@ test('only dark: every new song has a style, a dark scale and its own tempo; old
   }
   // only dark (Ruslan, 2026-10-12: "ok dark only")
   expect(new Set(names.map(styleName))).toEqual(new Set(['dark']))
-  // the hypnotic line and the 303 come by themselves, in some songs
-  expect(new Set(names.map(leadOf))).toEqual(new Set([null, 'hypnotic', 'acid']))
+  // the soft hypnotic line comes by itself in some songs; no 303 (Ruslan: "i don't like acid ... remove it")
+  expect(new Set(names.map(leadOf))).toEqual(new Set([null, 'hypnotic']))
+  for (const t of names) expect(['pluck', 'soft']).toContain(INSTRUMENTS.acid[instOf(t).acid])
+  expect(soundInfo(names[0], 'acid').insts.map((x: any) => x.name)).toEqual(['pluck', 'soft'])
+  expect(soundInfo(names[0], 'bass').insts.map((x: any) => x.name)).not.toContain('acid')
+  // an old song keeps every sound in the edit card
+  expect(soundInfo(parseCode('late-night-deploy@131m2e2d3a4')!, 'acid').insts.map((x: any) => x.name)).toContain('acid')
   // an old code has no style and keeps its mood
   const old = parseCode('late-night-deploy@131m2e2d3a4')!
   expect(old.style).toBeNull()
@@ -586,6 +593,19 @@ test('tonality: one key a song, another song another key; auto glides the tempo'
   const leads = Array.from({ length: 80 }, (_, n) => leadOf(trackFor('lead ' + n))).filter(Boolean).length
   expect(leads).toBeGreaterThan(8)
   expect(leads).toBeLessThan(35)
+  // a set changes key: the next song never lands in the key of the one before, by auto or by ⏭
+  for (let n = 0; n < 40; n++) {
+    const a = trackFor('song ' + n), b = { ...trackFor('song ' + (n + 1)), transpose: 0 }
+    const same = { ...b, transpose: ((NOTES.indexOf(noteNameOf(a)) - NOTES.indexOf(noteNameOf(b))) + 12) % 12 }
+    expect(noteNameOf(same)).toBe(noteNameOf(a))
+    const set = newSet(atPart(a, PLAN.length - 1))
+    afterLoop(set, { auto: true, nextTrack: () => same })
+    expect(noteNameOf(set.track)).not.toBe(noteNameOf(a))
+    expect(noteNameOf(freshKey(same, a))).not.toBe(noteNameOf(a))
+    expect(['e', 'f', 'f#', 'g', 'a']).toContain(noteNameOf(freshKey(same, a)))
+    // a song in another key already keeps it
+    if (noteNameOf(b) !== noteNameOf(a)) expect(freshKey(b, a).transpose).toBe(0)
+  }
   const t = trackFor('warehouse 4am')
   // the glide: the new song mixes in at the old tempo, then moves GLIDE bpm a loop to its own
   const deep = trackFor('cold sleep')

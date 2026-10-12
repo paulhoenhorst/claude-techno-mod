@@ -10,6 +10,9 @@
 // A layer the build has not brought in (or took out) is dim; one you muted is struck through.
 // The next sound of the build is a dashed row: where it will play, not yet clickable.
 const LABEL = 8
+// what a row is called where its layer name says too little (the edit card
+// calls the acid layer "melody" too)
+const SHOW = { acid: 'melody' }
 const TOP = 1 // the beat ruler (no "bar n/8" line: Ruslan, 2026-10-04)
 const cellX = (i) => LABEL + i * 3 + Math.floor(i / 4)
 
@@ -84,14 +87,14 @@ export default function Grid(props, surface) {
   const rows = props.rows.map(([name, pattern, color, isOn, isMuted, isNext], r) => {
     if (isNext) {
       const cells = [...pattern].map((c, i) => Box({ key: name + i, width: 2, height: 1, marginRight: gap(i), children: [Text({ dimColor: true, children: [c !== '.' ? '▪▪' : '╌╌'] })] }))
-      return Box({ key: 'g-' + name, flexDirection: 'row', children: [Box({ key: 'l-' + name, width: LABEL, children: [Text({ dimColor: true, italic: true, children: [name] })] }), ...cells] })
+      return Box({ key: 'g-' + name, flexDirection: 'row', children: [Box({ key: 'l-' + name, width: LABEL, children: [Text({ dimColor: true, italic: true, children: [SHOW[name] ?? name] })] }), ...cells] })
     }
     const label = Text({
       bold: isOn,
       dimColor: !isOn,
       strikethrough: !!isMuted,
       underline: hover?.r === r && hover.i === -1,
-      children: [name],
+      children: [SHOW[name] ?? name],
     })
     const cells = [...pattern].map((c, i) => {
       const hit = c !== '.'

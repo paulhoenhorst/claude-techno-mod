@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/46ea094d-1790-4cb2-94a0-cd0940f2e1a9
 A [Claude Code](https://claude.com/claude-code) mod that plays a real techno set in a band above your chat box.
 
 - 🎛️ **One phrase, a whole set.** Kick, then bass, then hats. Three drops, breakdowns between them, about seven minutes.
-- 🤖 **Claude is the DJ.** Say *"add congas"*, *"drop the acid"*, *"next track"* and it turns the knobs.
+- 🤖 **Claude is the DJ.** Say *"add congas"*, *"more energy"*, *"next track"* and it turns the knobs.
 - 🌀 **It never stops.** When a track ends, it mixes into the next one, layer by layer, at the same tempo.
 - 🖤 **No samples. No AI audio. No account.** Every sound is synthesized on your Mac.
 
@@ -61,7 +61,7 @@ The band in the video above, part by part:
 | **▰▰▱▱ drop 1** | The whole song, one block per 15 seconds, and where you are: intro, groove, build, drop, break, outro |
 | **the grid** | The loop that plays now. Click a cell to add a hit, click a name to mute it |
 | **auto** | On: it plays the whole set and moves on by itself. Off: it stays on one part |
-| **dark · 133 bpm** | Always dark, never the same: every song picks its own bass lines, kick, room and tempo, and some bring congas, a shaker, a drone, a hypnotic line or a 303 |
+| **dark · 133 bpm** | Always dark, never the same: every song picks its own bass lines, kick, room and tempo, and some bring congas, a shaker, a drone or a soft hypnotic melody. Each song has its own key, and the next song always moves to another |
 | **+ new song** | Type any name, or press a number: one of your recent chats or a classic |
 | **edit** | The studio: instruments, patterns, notes, grit, filters, tempo, and the song's parts |
 | <kbd>⏯</kbd> <kbd>⏭</kbd> <kbd>⏮</kbd> | The Mac media keys work too, and the track shows in Control Center |

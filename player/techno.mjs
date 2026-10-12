@@ -466,7 +466,7 @@ function jumpTo(track) {
 
 function skip() {
   edit((set) => {
-    const next = set.handover ? set.track : takeNext()
+    const next = set.handover ? set.track : C.freshKey(takeNext(), set.track)
     Object.assign(set, C.newSet(E.atPart(E.cleanTrack(next), 0)), { handover: null, swapped: null })
   })
 }

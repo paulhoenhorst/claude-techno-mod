@@ -11,7 +11,25 @@
 // a fall on the last loop of a drop, a swell into a new sound, a build-up
 // before the low end swaps in the handover. The first loop of a drop (and of
 // the new track after a swap) gets a crash, with auto a boom too.
-import { PLAN, HANDOVERS, HANDOVER_LOOPS, atPart, onlyLayers, cleanTrack, encodeCode, transitionsOf, planOf } from './engine.js'
+import { PLAN, HANDOVERS, HANDOVER_LOOPS, atPart, onlyLayers, cleanTrack, encodeCode, transitionsOf, planOf, noteName } from './engine.js'
+
+// The next song in a set is never in the key of the one before (Ruslan,
+// 2026-10-12: "don't want a whole set in 1 key tho, change keys"). A song
+// keeps one key from start to end; when the next one would land on the same
+// key, it moves to another of the low keys (e, f, f#, g, a, where the sub
+// sits at 41..55 Hz), picked by its name.
+const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
+const LOW_KEYS = ['e', 'f', 'f#', 'g', 'a']
+export function freshKey(next, prev) {
+  const t = cleanTrack(next)
+  const here = noteName(cleanTrack(prev ?? {}))
+  if (!prev || noteName(t) !== here) return t
+  let h = 0
+  for (const c of t.phrase) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  const others = LOW_KEYS.filter((k) => k !== here)
+  const to = others[h % others.length]
+  return { ...t, transpose: (t.transpose + NOTES.indexOf(to) - NOTES.indexOf(here) + 12) % 12 }
+}
 
 // A fresh set on a track (from its first part unless it has one). `at` is
 // the position in the track's plan (a part can come twice in it).
@@ -80,7 +98,7 @@ export function stepOn(set, nextTrack) {
     set.track = atPart(set.track, plan[k + 1])
     return set
   }
-  const next = cleanTrack(nextTrack())
+  const next = freshKey(nextTrack(), set.track)
   const shape = transitionsOf(set.track).land
   set.handover = { from: set.track, step: 0, loop: 0, shape }
   set.track = { ...atPart(next, HANDOVERS[shape].to), bpm: set.track.bpm }

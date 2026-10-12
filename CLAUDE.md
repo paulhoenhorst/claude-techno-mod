@@ -45,6 +45,19 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 
 ## Decisions
 
+### 0.10.2 a new key every song, no 303 (Ruslan, 2026-10-12)
+
+- "don't want a whole set in 1 key tho, change keys": the next song never
+  lands in the key of the one before (`freshKey` in conductor.js, used by
+  the handover and by ⏭). When it would, it moves to another low key (e, f,
+  f#, g, a), picked by its name. A song still keeps one key from start to end.
+- "i don't like acid samples/instrument ... remove it": the 303 lead is
+  gone (`LEADS` has only hypnotic, about one song in four). A style song's
+  melody layer is always pluck or soft, even when turned on by hand; the
+  edit card hides the acid and square sounds and the acid bass on a style
+  song (`NOT_IN_STYLE`). Old songs keep every sound.
+- The grid row of the acid layer says "melody", like the edit card.
+
 ### 0.10.1 one key a song (Ruslan, 2026-10-12)
 
 - "it changes tonalities over the song too much. also sometimes too much

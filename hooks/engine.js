@@ -59,7 +59,7 @@ const scaleOf = (t) => t.scale ?? (t.mood === 0 ? 2 : t.mood >= 3 ? 1 : 0)
 //   rooms   the reverb sizes to pick from; `echo` more of the ping-pong on perc and acid
 //   gain    the level into the master's soft clip
 export const STYLES = [
-  { name: 'dark', bpm: [128, 136], mood: 0, lifts: [0, 1, 1], scales: [2, 0, 4], swing: [0, 0, 1], kick: [0, 1, 2], bass: [0, 1, 2, 4, 5, 6], hats: [0, 1, 2, 3, 4], clap: [0, 1, 2], perc: [1, 2, 3, 4, 5], drops: [], adds: {}, leads: [6, 1, 1], rooms: [0.8, 0.86, 0.92], echo: 1.2, gain: 0.95 },
+  { name: 'dark', bpm: [128, 136], mood: 0, lifts: [0, 1, 1], scales: [2, 0, 4], swing: [0, 0, 1], kick: [0, 1, 2], bass: [0, 1, 2, 4, 5, 6], hats: [0, 1, 2, 3, 4], clap: [0, 1, 2], perc: [1, 2, 3, 4, 5], drops: [], adds: {}, leads: [3, 1], rooms: [0.8, 0.86, 0.92], echo: 1.2, gain: 0.95 },
 ]
 // The extra instruments (Ruslan, 2026-10-12: "you add more other
 // instruments?"). The phrase picks each one with even odds, so one song has
@@ -78,16 +78,18 @@ export function extrasOf(t) {
 // on 2026-10-12: hypnotic and acid are no buttons, they come by themselves):
 //   hypnotic  a soft line that loops over 3, 5 or 7 steps against the bar,
 //             from the first breakdown to drop 3
-//   acid      the 303, in drop 2, the second breakdown and drop 3
-// About one song in four has one ("sometimes too much melody", Ruslan,
-// 2026-10-12).
+// About one song in four has it ("sometimes too much melody", Ruslan,
+// 2026-10-12). The 303 lead is gone ("i don't like acid samples/instrument
+// ... remove it"): a style song never picks the acid or square sound, and
+// the edit card does not offer them (or the acid bass) on a style song.
 // Each sets the acid layer's sound (indexes into INSTRUMENTS.acid) and its
 // level (the hypnotic line plays on most steps, so it sits lower).
 export const LEADS = {
   hypnotic: { parts: [6, 7, 8, 9], acid: [2, 3], level: 0.5 },
-  acid: { parts: [7, 8, 9], acid: [0, 1], level: 0.85 },
 }
-const LEAD_NAMES = [null, 'hypnotic', 'acid']
+const LEAD_NAMES = [null, 'hypnotic']
+// The sounds a style song never offers: the 303 and its square, the acid bass
+const NOT_IN_STYLE = { acid: ['acid', 'square'], bass: ['acid'] }
 const styleOf = (t) => (t?.style === null || t?.style === undefined ? null : STYLES[t.style] ?? null)
 // The lead line of a style track (null: none), the same for a phrase and its style
 export function leadOf(t) {
@@ -105,7 +107,8 @@ export function instOf(t) {
   const out = {}
   const lead = leadOf(t)
   for (const name of Object.keys(INSTRUMENTS)) {
-    const own = !st ? 0 : name === 'acid' ? (lead ? pick(r, LEADS[lead].acid) : 0) : pick(r, st[name])
+    // the melody of a style song is a soft one, even when you turn it on by hand
+    const own = !st ? 0 : name === 'acid' ? pick(r, LEADS[lead ?? 'hypnotic'].acid) : pick(r, st[name])
     out[name] = t.inst?.[name] ?? own
   }
   return out
@@ -787,7 +790,8 @@ export function soundInfo(input, layer) {
   const t = cleanTrack(input)
   const a = arrange({ ...t, layers: { ...t.layers, [layer]: true } })
   const row = GRID_LAYERS.includes(layer) ? grid({ ...t, layers: { ...t.layers, [layer]: true } })[layer] ?? '.'.repeat(STEPS) : null
-  const insts = INSTRUMENTS[layer] ? INSTRUMENTS[layer].map((name, i) => ({ name: layer === 'perc' && i === 0 ? null : name, value: i })).filter((x) => x.name) : []
+  const hide = styleOf(t) ? NOT_IN_STYLE[layer] ?? [] : []
+  const insts = INSTRUMENTS[layer] ? INSTRUMENTS[layer].map((name, i) => ({ name: (layer === 'perc' && i === 0) || hide.includes(name) ? null : name, value: i })).filter((x) => x.name) : []
   const inst = layer === 'perc' ? a.percKind : INSTRUMENTS[layer]?.[a.inst[layer] ?? 0] ?? null
   const presets = Object.entries(PATTERNS[layer] ?? {}).map(([name, p]) => ({ name, on: !!row && [...p].every((c, i) => (c === 'x') === (row[i] !== '.')) }))
   let notes = null

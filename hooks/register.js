@@ -16,7 +16,7 @@ import { CLASSICS } from './classics.js'
 const TOOL = 'mcp__techno__jam'
 // The plugin version: in the jam tool's answer, and the player of an older
 // version is replaced by this one. Keep it equal to plugin.json (a test checks).
-const VERSION = '0.10.1'
+const VERSION = '0.10.2'
 // [accent, normal] fill of a hit in the step grid
 const LAYER_COLORS = {
   kick: ['#e85a5a', '#c94040'],
@@ -269,7 +269,7 @@ export function register(on) {
       name: 'jam',
       description:
         "Change the techno music in the user's techno pane (the techno mod). Use it when the user asks to change the music: more or less energy, faster or slower, add or drop a layer, new patterns, the next part, the next or previous track, a new phrase, auto on or off, play or stop. Pass only what changes. " +
-        'Every song is dark techno, 128-136 bpm. The song name picks its bass lines and sounds, and some songs bring congas, a shaker, a drone, a looping hypnotic line or a 303 acid line (the acid layer). dice: true gives new bass lines and patterns. energy: 0 minimal, 1 rolling, 2 driving, 3 peak, 4 rave. ' +
+        'Every song is dark techno, 128-136 bpm. The song name picks its bass lines and sounds, and some songs bring congas, a shaker, a drone or a soft looping melody (the acid layer, shown as melody). There is no 303. dice: true gives new bass lines and patterns. energy: 0 minimal, 1 rolling, 2 driving, 3 peak, 4 rave. ' +
         'A track is a long set: intro, groove, build, three drops with breakdowns between them, an outro that mixes into the next track. next: true moves to the next part. track: "next" mixes into the next track now, "previous" goes back to the one before. ' +
         'layers (kick, bass, hats, clap, perc, ride, pad, rumble, acid, voice, stab, conga, shaker, drone): true forces a layer on, false off, "auto" gives it back to the arrangement. dice: true rolls new patterns. phrase: a new phrase starts a new track. favorite: true adds the track to the favorites. volume: 0 mute .. 5 loudest, 4 is the default (each step about 6 dB); for "quieter" or "louder" move it one step. ' +
         'note: a few words for the pane that say what you changed. Reply to the user in one short line.',
@@ -289,7 +289,7 @@ export function register(on) {
           play: { type: 'boolean', description: 'true starts the music, false stops it' },
           volume: { type: 'integer', minimum: 0, maximum: 5, description: '0 mute, 4 the default, 5 loudest' },
           auto: { type: 'boolean', description: 'true lets the set play by itself (parts, drops, then the next track); false stays on a part until next' },
-          note: { type: 'string', description: 'A few words for the pane, like "darker, acid on"' },
+          note: { type: 'string', description: 'A few words for the pane, like "more energy, congas on"' },
         },
       },
     })
