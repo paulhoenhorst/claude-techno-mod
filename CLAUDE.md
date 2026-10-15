@@ -13,6 +13,9 @@ Needs Claude Code v2.1.286 or later (plays in the desktop Code tab on
 node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mod
 (MIT); `README.md` is the front page for strangers.
 
+**Deploy approval: not needed** (owner, 2026-10-15: no paying users). Push and
+deploy a verified change without asking, then say what is live.
+
 ## Files
 
 | File | What it is |
