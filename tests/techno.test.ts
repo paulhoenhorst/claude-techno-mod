@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withStyle, instOf, leadOf, arrange, scaleName, keyName, noteName as noteNameOf, activeLayers, transitionsOf, editTrack, planOf, planAdd, grid, soundInfo, INSTRUMENTS, PLAN, STYLES, LEADS, EXTRAS, BASS_LINES, extrasOf, HANDOVERS, HANDOVER_LOOPS, BUILDS, FALLS } from '../hooks/engine.js'
 import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE, freshKey } from '../hooks/conductor.js'
-import { partBar } from '../hooks/views.js'
+import { partBar, contextLabel } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
 
 const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
@@ -77,7 +77,9 @@ function stubs(on: any, store: Record<string, unknown> = {}, run?: (argv: string
   })
   on('prompt.submit', ($: any, e: any) => ({ text: e.text }))
   on('ui.render', () => ({ type: 'Text', props: {}, children: ['drawn by Claude Code'] }))
-  return { clock, player }
+  const usage = { percent: 42 as number | undefined }
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000, tokens: usage.percent === undefined ? undefined : usage.percent * 2000, percent: usage.percent }, rateLimits: [] } }))
+  return { clock, player, usage }
 }
 
 const start = ($: any) => $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work/my-app' })
@@ -655,4 +657,36 @@ test('diverse dark songs: their own bass lines and bass sounds, and extras (cong
   expect(grid(toggleStep(c, 'conga', 1)).conga).not.toBe(grid(c).conga)
   // an old code brings no extras
   expect(extrasOf(parseCode('late-night-deploy@131m2e2d3a4')!)).toEqual([])
+})
+
+test('the context window: a circle that fills by quarters and the percent, the warning color from 70%, nothing before the first answer', () => {
+  expect(contextLabel(undefined)).toBe(null)
+  expect(contextLabel(null)).toBe(null)
+  expect(contextLabel(0)).toEqual({ text: '○ 0%', color: null })
+  expect(contextLabel(30)).toEqual({ text: '◔ 30%', color: null })
+  expect(contextLabel(50)).toEqual({ text: '◑ 50%', color: null })
+  expect(contextLabel(72)).toEqual({ text: '◕ 72%', color: 'warning' })
+  expect(contextLabel(95)).toEqual({ text: '● 95%', color: 'error' })
+})
+
+test('the deck and the bar show how full the context window is, and follow it', async ($, on) => {
+  const { clock, usage } = stubs(on)
+  await start($)
+  await $.command.run({ command: 'techno', args: '' })
+  await clock.advance(1100)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ text: '◑ 42%' })).toBeDefined()
+  usage.percent = 81
+  await clock.advance(1100)
+  expect(await ui.find({ text: '◕ 81%' })).toBeDefined()
+  // hidden: the bar shows it too
+  await $.command.run({ command: 'techno', args: '' })
+  expect(await ui.find({ key: 'mini-play' })).toBeDefined()
+  expect(await ui.find({ text: '◕ 81%' })).toBeDefined()
+  // a fresh chat has no figure yet: nothing is drawn
+  usage.percent = undefined
+  await clock.advance(1100)
+  expect(await ui.find({ key: 'mini-play' })).toBeDefined()
+  expect(await ui.find({ text: /^[○◔◑◕●] \d+%$/ })).toBeUndefined()
+  await ui.unmount()
 })

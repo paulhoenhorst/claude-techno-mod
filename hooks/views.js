@@ -58,8 +58,24 @@ function volume(ui, vm, act, prefix) {
   ] })
 }
 
+// How full Claude's context window is (Ruslan, 2026-10-15: "just a circle or
+// %"): a circle that fills by quarters, then the percent. Dim until 70%, the
+// warning color from 70%, the error color from 90%. Nothing before the first
+// answer of the chat.
+const PIE = ['○', '◔', '◑', '◕', '●']
+export function contextLabel(percent) {
+  if (percent === null || percent === undefined) return null
+  return { text: PIE[Math.min(4, Math.round(percent / 25))] + ' ' + percent + '%', color: percent >= 90 ? 'error' : percent >= 70 ? 'warning' : null }
+}
+function contextFill(ui, vm, prefix) {
+  const c = contextLabel(vm.context)
+  if (!c) return null
+  return ui.Text({ key: prefix + 'context', ...(c.color ? { color: c.color } : { dimColor: true }), children: [c.text] })
+}
+
 function topLine(ui, vm, act) {
   return spread(ui, transport(ui, vm, act, ''), [
+    contextFill(ui, vm, ''),
     toggle(ui, 'auto', vm.auto ? '● auto' : '○ auto', vm.auto, () => act.auto(), { hotkey: 'a' }),
     ui.Button({ key: 'close', label: 'hide', role: 'dismiss', plain: true, dimColor: true, onPress: () => act.close() }),
   ], 'top')
@@ -340,6 +356,7 @@ export function miniView(ui, vm, act) {
   ], [
     vm.update?.state === 'ready' ? ui.Button({ key: 'mini-update', label: '↑ update', variant: 'primary', onPress: () => act.update() }) : null,
     vm.update?.state === 'done' ? dim(ui, '✓ updated · new chat') : null,
+    contextFill(ui, vm, 'mini-'),
     toggle(ui, 'mini-auto', vm.auto ? '● auto' : '○ auto', vm.auto, () => act.auto()),
     link(ui, 'mini-open', 'open', () => act.open()),
     link(ui, 'mini-close', '×', () => act.closeBar()),

@@ -22,7 +22,7 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 | `hooks/hooks.json` | Points to the hooks module. |
 | `hooks/package.json` | `"type": "module"`, so node 20 runs the player (it imports `engine.js`). |
 | `hooks/register.js` | The chat side: a remote control for the player. Starts the player when none (or an older one) answers, polls its state every second, `/techno` command, `jam` tool, save and share. Every `$` call lives here (the validator refuses `$` passed to imported files). |
-| `hooks/views.js` | The app's screens as pure functions of `(ui, vm, act)`: the deck (layout A with the skyline), the edit card (layout B), favorites (with the tracks heard before), new track, and the bar shown while the app is hidden. |
+| `hooks/views.js` | The app's screens as pure functions of `(ui, vm, act)`, and `contextLabel` (the context window fill): the deck (layout A with the skyline), the edit card (layout B), favorites (with the tracks heard before), new track, and the bar shown while the app is hidden. |
 | `hooks/classics.js` | Pure: `CLASSICS`, the song names that stand on their own (the first eight are the old starters), and `pickIndex`. Shared by the chat and the player. |
 | `hooks/words.js` | Pure: `keyWords(prompt)`, the 2 or 3 plain words of a prompt that become a track auto may pick. |
 | `hooks/grid.client.js` | A `Client` surface module: the step sequencer with its own playhead clock. Colors of empty cells and the playhead are theme keys (`subtle`, `text`), so it reads in light and dark. A click on a row name posts `{ toggle: layer }`; a click on a cell posts `{ step, layer }`. |
@@ -44,6 +44,19 @@ node 20 or later. Public at https://github.com/ruslanshchuchkin/claude-techno-mo
 | `scripts/readme-media/film-audio.mjs` | The audio of the launch film: a montage of real loops of one auto set ("deep focus" into "ship it"), cut on bar lines, the engine's own voice lines with the music dipped under them, and `film.json` (every bar). The film itself is the `TechnoLaunch` composition in `~/Documents/video-studio`. |
 
 ## Decisions
+
+### 0.10.3 the context window (Ruslan, 2026-10-15)
+
+- "add to /techno the context window saturation? just a circle or %": the
+  deck's top line (before auto) and the bar (before auto) show how full
+  Claude's context window is, `◔ 34%`: a circle that fills by quarters
+  (○ ◔ ◑ ◕ ●), then the percent. Dim until 70%, the `warning` color from
+  70%, `error` from 90%. `contextLabel()` in views.js.
+- The figure is `$.session.usage().context.percent`, the status line's
+  `used_percentage` (free to ask), read in the 1 s `poll()`. A fresh or just
+  compacted chat has no figure yet, so nothing is drawn. An engine without
+  `$.session.usage` throws inside a try: nothing is drawn, the rest works.
+- It is this chat's window, not the player's: each chat shows its own.
 
 ### 0.10.2 a new key every song, no 303 (Ruslan, 2026-10-12)
 

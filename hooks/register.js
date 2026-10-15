@@ -16,7 +16,7 @@ import { CLASSICS } from './classics.js'
 const TOOL = 'mcp__techno__jam'
 // The plugin version: in the jam tool's answer, and the player of an older
 // version is replaced by this one. Keep it equal to plugin.json (a test checks).
-const VERSION = '0.10.2'
+const VERSION = '0.10.3'
 // [accent, normal] fill of a hit in the step grid
 const LAYER_COLORS = {
   kick: ['#e85a5a', '#c94040'],
@@ -55,6 +55,7 @@ const s = {
   lastPrompt: '',
   you: '',
   status: '',
+  context: null, // how full Claude's context window is, 0..100, or null before the first answer
   pollTimer: null,
   grids: new Map(),
   classicTurn: Math.floor(Math.random() * 9), // which four classics the new song screen shows
@@ -133,7 +134,12 @@ async function poll($) {
   } catch {
     if (s.ps) { s.ps = null; s.down = 'the player stopped' }
   }
-  if (s.ps?.rev !== before || s.ps?.playing) $.ui.invalidate('ui.render')
+  // the context window, as the status line reads it (free to ask)
+  let context = s.context
+  try { context = (await $.session.usage()).context.percent ?? null } catch {}
+  const moved = context !== s.context
+  s.context = context
+  if (s.ps?.rev !== before || s.ps?.playing || moved) $.ui.invalidate('ui.render')
 }
 
 // ---------- saving ----------
@@ -402,6 +408,7 @@ export function register(on) {
       auto: !!ps?.auto,
       fav: !!ps?.fav,
       volume: ps?.volume ?? 4,
+      context: s.context,
       nextIn,
       where,
       editOpen: s.editOpen,
