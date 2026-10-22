@@ -28,7 +28,7 @@ deploy a verified change without asking, then say what is live.
 | `hooks/views.js` | The app's screens as pure functions of `(ui, vm, act)`, and `contextLabel` (the context window fill): the deck (layout A with the skyline), the edit card (layout B), favorites (with the tracks heard before), new track, and the bar shown while the app is hidden. |
 | `hooks/classics.js` | Pure: `CLASSICS`, the song names that stand on their own (the first eight are the old starters), and `pickIndex`. Shared by the chat and the player. |
 | `hooks/words.js` | Pure: `keyWords(prompt)`, the 2 or 3 plain words of a prompt that become a track auto may pick. |
-| `hooks/dancers.js` | Pure: `DANCERS` (clawd, spark, cat, robot: a color and frames of three lines), `dancerFor(word)` (a name, `off`, or your own frames split by `;`), `nextDancer`, `MOVES` (how it moves per section) and `SAYS` (what it says when a section starts). |
+| `hooks/dancers.js` | Pure: `DANCERS` (clawd, spark, cat, robot: a color and frames drawn as pixel art, 18 by 6, that `px` turns into three lines of quadrant blocks), `dancerFor(word)` (a name, `off`, or your own frames split by `;`), `nextDancer`, `MOVES` (how it moves per section) and `SAYS` (what it says when a section starts). |
 | `hooks/dancer.client.js` | A `Client` surface module: the dancer, on its own step clock like the grid. Four rows (jumps, notes and what it says, then the dancer). It walks across and bounces off the edges, poses, hops on the offbeat in a drop, moonwalks in a handover, sleeps (`z Z z`) while stopped. A click posts `{ dancer: 'next' }`. |
 | `hooks/grid.client.js` | A `Client` surface module: the step sequencer with its own playhead clock. Colors of empty cells and the playhead are theme keys (`subtle`, `text`), so it reads in light and dark. A click on a row name posts `{ toggle: layer }`; a click on a cell posts `{ step, layer }`. |
 | `hooks/engine.js` | The synth, `PLAN` (the set), `HANDOVER`, `render` (a folded loop, for mp3s), `renderLoop` (a loop with its tail, for the stream, optionally mixed with a second track). Plain JS with no Node or browser APIs. |
@@ -66,6 +66,10 @@ deploy a verified change without asking, then say what is live.
   off | frames>`; the jam tool's `dancer`. Your own frames are one line each,
   split by `;`. Kept in `$.store` (`dancer`) for every chat; a chat open now
   sees a change made in another chat at its next start.
+- 0.10.5 (Paul: "the layout of the dancing things should be like the clawd.
+  not only outline"): every dancer is filled pixel art like clawd, 18 by 6
+  pixels into nine cells of quadrant blocks (`px`), the eyes as the notch in
+  ▛ ▜ ▙ ▟. The line-art cat and robot are gone; the spark is a filled star.
 
 ### 0.10.3 the context window (Ruslan, 2026-10-15)
 

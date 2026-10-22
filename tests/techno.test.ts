@@ -3,7 +3,7 @@ import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withSty
 import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE, freshKey } from '../hooks/conductor.js'
 import { partBar, contextLabel } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
-import { dancerFor, nextDancer, DANCERS, DANCER_NAMES } from '../hooks/dancers.js'
+import { dancerFor, nextDancer, px, DANCERS, DANCER_NAMES } from '../hooks/dancers.js'
 
 const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
 
@@ -713,6 +713,10 @@ test('dancers: every dancer has frames of one height; your own frames split on "
   expect(nextDancer(DANCER_NAMES.at(-1))).toBe(DANCER_NAMES[0])
   expect(nextDancer('(•_•)')).toBe(DANCER_NAMES[0])
   expect(Object.keys(DANCERS)).toContain('clawd')
+  // pixel art, filled like clawd: three lines of nine cells; clawd as the welcome screen draws it
+  for (const name of DANCER_NAMES) for (const f of dancerFor(name)!.frames) for (const l of f) expect([...l]).toHaveLength(9)
+  expect(dancerFor('clawd')!.frames[0]).toEqual([' ▐▛███▜▌ ', '▝▜█████▛▘', '  ▘▘ ▝▝  '])
+  expect(px('#.\n.#')).toEqual(['▚'])
 })
 
 test('the dancer: over the grid, asleep while stopped, walks and dances to the beat, a click picks the next one', async ($, on) => {
@@ -742,7 +746,7 @@ test('the dancer: over the grid, asleep while stopped, walks and dances to the b
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
   await ui.pointer({ type: 'down', x: 2, y: 2, button: 'left', in: 'dancer' })
-  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('✻')
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain(dancerFor('spark')!.frames[0][1])
   expect((await ui.find({ text: /dancer: spark/ }))?.text).toContain('/techno dancer off')
   await ui.unmount()
 })
@@ -755,7 +759,7 @@ test('/techno dancer picks the dancer, off hides it, your own frames dance; Clau
   expect((await $.command.run({ command: 'techno', args: 'dancer' })).text).toContain('The dancer is cat. Pick one: clawd, spark, cat, robot, off')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
-  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('( o.o )')
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain(dancerFor('cat')!.frames[0][1])
   await $.command.run({ command: 'techno', args: 'dancer off' })
   expect(await ui.find({ key: 'dancer' })).toBeUndefined()
   expect(await ui.find({ key: 'grid' })).toBeDefined()
@@ -763,7 +767,7 @@ test('/techno dancer picks the dancer, off hides it, your own frames dance; Clau
   expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('(•_•)')
   const r = await $.tool.call({ tool: 'mcp__techno__jam', dancer: 'robot' })
   expect(String(r.result)).toContain('dancer: robot')
-  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('[o_o]')
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain(dancerFor('robot')!.frames[0][1])
   await ui.unmount()
 })
 
