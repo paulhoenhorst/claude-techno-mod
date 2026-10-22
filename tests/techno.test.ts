@@ -3,6 +3,7 @@ import { atPart, encodeCode, parseCode, toggleStep, trackFor, styleName, withSty
 import { newSet, loopSpec, afterLoop, stepOn, posOf, sectionLabel, homeOf, GLIDE, freshKey } from '../hooks/conductor.js'
 import { partBar, contextLabel } from '../hooks/views.js'
 import { keyWords } from '../hooks/words.js'
+import { dancerFor, nextDancer, DANCERS, DANCER_NAMES } from '../hooks/dancers.js'
 
 const NOTES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
 
@@ -25,7 +26,7 @@ function fakePlayer() {
     const nx = PLAN[t.part + 1]
     return { code: encodeCode(t), id: id(t), phrase: t.phrase, mood: styleName(t), style: t.style == null ? null : styleName(t), bpm: t.bpm, part: t.part, section: PLAN[t.part].section, name: PLAN[t.part].name, from: null, next: nx ? { name: nx.name, adds: nx.adds, layer: nx.layer } : { name: 'the next track' }, bar: 0, loopsLeft: 1, at: posOf(p.set), plan: planOf(t) }
   }
-  const state = () => ({ version: '9.9.9', rev: p.rev, now: 0, playing: p.playing, auto: p.auto, playlist: null, view: view(), barStartedAt: 0, barMs: 1800, stepMs: 112, nextInMs: p.playing && p.auto ? 23000 : null, fav: p.favorites.some((f: any) => f.code === id(p.set.track)), favorites: p.favorites, recent: p.history.map((c: string) => ({ code: c, label: parseCode(c)!.phrase, mood: 'dark', bpm: 128 })), said: p.said, canUndo: false, volume: p.volume, chats: p.chats })
+  const state = () => ({ version: '9.9.9', rev: p.rev, now: 0, playing: p.playing, auto: p.auto, playlist: null, view: view(), barStartedAt: p.playing ? 1 : 0, barMs: 1800, stepMs: 112, nextInMs: p.playing && p.auto ? 23000 : null, fav: p.favorites.some((f: any) => f.code === id(p.set.track)), favorites: p.favorites, recent: p.history.map((c: string) => ({ code: c, label: parseCode(c)!.phrase, mood: 'dark', bpm: 128 })), said: p.said, canUndo: false, volume: p.volume, chats: p.chats })
   p.command = (c: any) => {
     p.cmds.push(c)
     p.rev++
@@ -688,5 +689,106 @@ test('the deck and the bar show how full the context window is, and follow it', 
   await clock.advance(1100)
   expect(await ui.find({ key: 'mini-play' })).toBeDefined()
   expect(await ui.find({ text: /^[○◔◑◕●] \d+%$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+// The dancer's rows as plain text, from the tree its module drew
+function dancerRows(tree: any): string[] {
+  const text = (el: any): string => (typeof el === 'string' ? el : (el?.children ?? el?.props?.children ?? []).map(text).join(''))
+  const rows = tree.children ?? tree.props?.children ?? []
+  return rows.map(text)
+}
+
+test('dancers: every dancer has frames of one height; your own frames split on ";"; off is none; a click walks the names', () => {
+  for (const name of DANCER_NAMES) {
+    const d = dancerFor(name)!
+    expect(d.frames.length).toBeGreaterThan(1)
+    for (const f of d.frames) expect(f.length).toBe(3)
+  }
+  expect(dancerFor(undefined)!.name).toBe('clawd')
+  expect(dancerFor('CAT')!.name).toBe('cat')
+  expect(dancerFor('off')).toBe(null)
+  expect(dancerFor('(•_•);(⌐■_■)')).toMatchObject({ name: 'own', frames: [['(•_•)'], ['(⌐■_■)']] })
+  expect(nextDancer('clawd')).toBe(DANCER_NAMES[1])
+  expect(nextDancer(DANCER_NAMES.at(-1))).toBe(DANCER_NAMES[0])
+  expect(nextDancer('(•_•)')).toBe(DANCER_NAMES[0])
+  expect(Object.keys(DANCERS)).toContain('clawd')
+})
+
+test('the dancer: over the grid, asleep while stopped, walks and dances to the beat, a click picks the next one', async ($, on) => {
+  const { player } = stubs(on)
+  await start($)
+  await $.command.run({ command: 'techno', args: '' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    if (player.playing) await ui.press({ key: 'play' })
+    expect(await ui.find({ key: 'dancer' })).toBeDefined()
+    await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
+    // stopped: it sleeps
+    const asleep = dancerRows(await ui.drawn({ in: 'dancer' }))
+    expect(asleep).toHaveLength(4)
+    expect(asleep[0]).toContain('z Z z')
+    expect(asleep.join('\n')).toContain('▐▛███▜▌')
+    await ui.press({ key: 'play' })
+    // playing: it moves on its own clock
+    const first = dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')
+    await ui.advance(112 * 16)
+    const later = dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')
+    expect(later).not.toBe(first)
+    expect(later).not.toContain('z Z z')
+    await ui.unmount()
+  }
+  // a click on it: the next dancer
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
+  await ui.pointer({ type: 'down', x: 2, y: 2, button: 'left', in: 'dancer' })
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('✻')
+  expect((await ui.find({ text: /dancer: spark/ }))?.text).toContain('/techno dancer off')
+  await ui.unmount()
+})
+
+test('/techno dancer picks the dancer, off hides it, your own frames dance; Claude picks one with the jam tool', async ($, on) => {
+  stubs(on, { dancer: 'cat' })
+  await start($)
+  await $.command.run({ command: 'techno', args: '' })
+  // the dancer kept from another chat
+  expect((await $.command.run({ command: 'techno', args: 'dancer' })).text).toContain('The dancer is cat. Pick one: clawd, spark, cat, robot, off')
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('( o.o )')
+  await $.command.run({ command: 'techno', args: 'dancer off' })
+  expect(await ui.find({ key: 'dancer' })).toBeUndefined()
+  expect(await ui.find({ key: 'grid' })).toBeDefined()
+  await $.command.run({ command: 'techno', args: 'dancer (•_•);(⌐■_■)' })
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('(•_•)')
+  const r = await $.tool.call({ tool: 'mcp__techno__jam', dancer: 'robot' })
+  expect(String(r.result)).toContain('dancer: robot')
+  expect(dancerRows(await ui.drawn({ in: 'dancer' })).join('\n')).toContain('[o_o]')
+  await ui.unmount()
+})
+
+test('the dancer in a drop: it jumps on the offbeat, notes trail it, and it says the drop; over the bar only while music plays', async ($, on) => {
+  const { player, clock } = stubs(on)
+  await start($)
+  await $.command.run({ command: 'techno', args: 'ruslan' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.resize({ columns: 60, rows: 4, in: 'dancer' })
+  player.set = newSet(atPart(trackFor('ruslan'), 5))
+  player.rev++
+  await clock.advance(1100)
+  const seen: string[][] = []
+  for (let i = 0; i < 16; i++) { await ui.advance(112); seen.push(dancerRows(await ui.drawn({ in: 'dancer' }))) }
+  // up in the top row on some steps (a jump), never asleep
+  expect(seen.some((r) => r[0].includes('▐▛███▜▌'))).toBe(true)
+  expect(seen.some((r) => r[1].includes('▐▛███▜▌'))).toBe(true)
+  expect(seen.some((r) => /[♪♫]/.test(r.join('')))).toBe(true)
+  expect(seen.some((r) => /DROP|oonts oonts|ship it|lets gooo/.test(r[0]))).toBe(true)
+  // hidden: the dancer dances over the bar while it plays, and leaves when it stops
+  await $.command.run({ command: 'techno', args: '' })
+  expect(await ui.find({ key: 'mini-play' })).toBeDefined()
+  expect(await ui.find({ key: 'dancer' })).toBeDefined()
+  await ui.press({ key: 'mini-play' })
+  expect(player.playing).toBe(false)
+  expect(await ui.find({ key: 'dancer' })).toBeUndefined()
   await ui.unmount()
 })

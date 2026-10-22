@@ -6,7 +6,7 @@
 // Layout A with the part bar (Ruslan, 2026-10-04): one line on top (previous,
 // play and next track side by side, the track, favorite, share, the volume;
 // auto and hide on the right), the part bar with the section, the style and
-// the tempo, the grid, one line under it (new song, next part, edit, favorites), and the edit card
+// the tempo, the dancer, the grid, one line under it (new song, next part, edit, favorites), and the edit card
 // when edit is open.
 // Three screens: the deck, the favorites (with the tracks you heard), and new
 // tracks.
@@ -244,6 +244,7 @@ function deck(ui, vm, act) {
     topLine(ui, vm, act),
     whereLine(ui, vm),
     styleLine(ui, vm),
+    vm.dancerEl,
     vm.gridEl,
     bottomLine(ui, vm, act),
     vm.editOpen ? editCard(ui, vm, act) : null,
@@ -346,11 +347,11 @@ export function appView(ui, vm, act) {
 
 // The bar above the chat box while the app is hidden: the same transport as
 // the deck (no section word: "i don't want to see these intro drop 1 at all
-// here"), then auto, open and × on the right.
+// here"), then auto, open and × on the right; over it the dancer, while the
+// music plays.
 export function miniView(ui, vm, act) {
   if (!vm.view) return spread(ui, [ui.Text({ bold: true, children: ['♪'] }), dim(ui, vm.down || 'starting the player…')], [link(ui, 'mini-close', '×', () => act.closeBar())], 'mini')
-  const v = vm.view
-  return spread(ui, [
+  const bar = spread(ui, [
     ui.Text({ bold: true, children: ['♪'] }),
     ...transport(ui, vm, act, 'mini-'),
   ], [
@@ -361,4 +362,6 @@ export function miniView(ui, vm, act) {
     link(ui, 'mini-open', 'open', () => act.open()),
     link(ui, 'mini-close', '×', () => act.closeBar()),
   ], 'mini')
+  // the dancer dances over the bar while the music plays
+  return vm.playing && vm.dancerEl ? col(ui, [vm.dancerEl, bar]) : bar
 }
