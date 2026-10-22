@@ -18,7 +18,7 @@ import { dancerFor, nextDancer, DANCER_NAMES, DEFAULT_DANCER, MOVES, SAYS } from
 const TOOL = 'mcp__techno__jam'
 // The plugin version: in the jam tool's answer, and the player of an older
 // version is replaced by this one. Keep it equal to plugin.json (a test checks).
-const VERSION = '0.10.5'
+const VERSION = '0.10.6'
 // [accent, normal] fill of a hit in the step grid
 const LAYER_COLORS = {
   kick: ['#e85a5a', '#c94040'],
@@ -460,7 +460,7 @@ export function register(on) {
         const d = v && ui.Client ? dancerFor(s.dancer) : null
         if (!d) return null
         const section = v.section ?? 'groove'
-        return ui.Client({ key: 'dancer', module: './dancer.client.js', width: '100%', props: { frames: d.frames, color: d.color, move: MOVES[section] ?? MOVES.groove, says: SAYS[section] ?? [], section, playing: looping, step, stepMs: ps?.stepMs || 115, stamp: ps?.barStartedAt ?? 0 } })
+        return ui.Client({ key: 'dancer', module: './dancer.client.js', width: '100%', props: { frames: d.frames, color: d.color, bold: !!d.bold, rows: d.rows ?? 4, wrap: !!d.wrap, trail: d.trail ?? null, move: MOVES[section] ?? MOVES.groove, says: SAYS[section] ?? [], section, playing: looping, step, stepMs: ps?.stepMs || 115, stamp: ps?.barStartedAt ?? 0 } })
       })(),
       gridEl: rows.length ? ui.Client({ key: 'grid', module: './grid.client.js', props: { rows, step, stepMs: ps?.stepMs || 115, playing: looping, stamp: ps?.barStartedAt ?? 0 } }) : null,
     }

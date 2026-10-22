@@ -6,11 +6,10 @@
 // own frames separated by `;` ("(•_•);( •_•)>⌐■-■;(⌐■_■)"), one line each.
 // A frame is a list of lines, all frames of one dancer as tall as each other.
 
-// Each dancer is pixel art, filled like clawd (the creature of the Claude
-// Code welcome screen): 18 pixels wide, 6 tall, `#` on, `.` off. `px` turns
-// two by two pixels into one quadrant block (▘▝▀▖▌▞▛▗▚▐▜▄▙▟█), so a frame
-// is three lines of nine cells. Eyes sit on the bottom half of a line (the
-// notch in ▛ ▜ ▙ ▟), as clawd's do.
+// clawd (the creature of the Claude Code welcome screen) is pixel art: 18
+// pixels wide, 6 tall, `#` on, `.` off. `px` turns two by two pixels into
+// one quadrant block (▘▝▀▖▌▞▛▗▚▐▜▄▙▟█), so a frame is three lines of nine
+// cells. Eyes sit on the bottom half of a line (the notch in ▛ ▜ ▙ ▟).
 const QUAD = ' ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█'
 export function px(art) {
   const rows = art.trim().split('\n').map((r) => r.trim())
@@ -24,11 +23,14 @@ export function px(art) {
   return out
 }
 
-// Each: [color (a theme key or a hex), [frame, frame, ...]]. Frame 0 is the
-// rest pose; the dance walks the others.
+// Each: { color (a theme key or a hex), bold, frames, and for a flyer:
+// rows (how tall its region is), wrap (it flies out on the right and comes
+// back on the left, never turns), trail (a rainbow behind it: the
+// characters, one color per row, and how much shorter each row above is) }.
+// Frame 0 is the rest pose; the dance walks the others.
 export const DANCERS = {
   // rest, both arms up, eyes up, one arm up
-  clawd: ['claude', [`
+  clawd: { color: 'claude', frames: [`
     ...############...
     ...##.######.##...
     .################.
@@ -52,87 +54,21 @@ export const DANCERS = {
     ..###############.
     ...############...
     ....#.#....#.#....
-    ..................`]],
-  // a star, an x, a plus, a pulse
-  spark: ['claude', [`
-    ...#....##....#...
-    ....##..##..##....
-    ..##############..
-    ..##############..
-    ....##..##..##....
-    ...#....##....#...`, `
-    ...##........##...
-    .....##....##.....
-    .......####.......
-    .......####.......
-    .....##....##.....
-    ...##........##...`, `
-    ........##........
-    ........##........
-    ..##############..
-    ..##############..
-    ........##........
-    ........##........`, `
-    ..................
-    .......####.......
-    ......######......
-    ......######......
-    .......####.......
-    ..................`]],
-  // rest (tail up), head bob, tail to the other side, a paw up
-  cat: ['#e8b03a', [`
-    ...##........##...
-    ...###.####.###...
-    ...############.#.
-    ..##############..
-    ...#.#......#.#...
-    ..................`, `
-    ..##..........##..
-    ..###.######.###..
-    ...############.#.
-    ...#############..
-    ..#.#........#.#..
-    ..................`, `
-    ...##........##...
-    ...###.####.###...
-    .#.############...
-    ..##############..
-    ....#.#....#.#....
-    ..................`, `
-    #..##........##...
-    .#.###.####.###...
-    ..#############.#.
-    ..##############..
-    ...#.#......#.#...
-    ..................`]],
-  // rest, arms up, looks left, one arm up
-  robot: ['#3fb6d9', [`
-    ........##........
-    ...############...
-    ...##.######.##...
-    .#.############.#.
-    ...############...
-    ....##......##....`, `
-    ........##........
-    .#.############.#.
-    .#.##.######.##.#.
-    ..##############..
-    ...############...
-    ...##........##...`, `
-    .......##.........
-    ...############...
-    ...#.######.###...
-    .#.############.#.
-    ...############...
-    .....##....##.....`, `
-    .........##.......
-    ...############.#.
-    ...##.######.##.#.
-    .#.##############.
-    ...############...
-    ....##......##....`]],
+    ..................`].map(px) },
+  // after djui/nyancat (github.com/djui/nyancat): the cat, its legs in two
+  // frames, and the slanted rainbow of `*.,*'^ that shimmers behind it
+  nyan: {
+    color: 'text',
+    bold: true,
+    frames: [
+      [' ,---/V\\ ', '~|__(o.o)', ' U U U U '],
+      [' ,---/V\\ ', '~|__(o.o)', '  UU  UU '],
+    ],
+    rows: 5,
+    wrap: true,
+    trail: { chars: "`*.,*'^", colors: ['#ff4b4b', '#ffd23f', '#3ccf5a', '#3f9bff', '#b46bff'], angle: 4 },
+  },
 }
-for (const k in DANCERS) DANCERS[k] = [DANCERS[k][0], DANCERS[k][1].map(px)]
 export const DANCER_NAMES = Object.keys(DANCERS)
 export const DEFAULT_DANCER = 'clawd'
 
@@ -143,7 +79,7 @@ export function dancerFor(word) {
   if (!w) return dancerFor(DEFAULT_DANCER)
   if (w.toLowerCase() === 'off') return null
   const known = DANCERS[w.toLowerCase()]
-  if (known) return { name: w.toLowerCase(), color: known[0], frames: known[1] }
+  if (known) return { name: w.toLowerCase(), ...known }
   const frames = w.split(';').map((f) => f.trim()).filter(Boolean).slice(0, 8).map((f) => [f.slice(0, 24)])
   return frames.length ? { name: 'own', color: 'claude', frames } : dancerFor(DEFAULT_DANCER)
 }

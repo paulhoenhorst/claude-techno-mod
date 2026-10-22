@@ -347,11 +347,11 @@ export function appView(ui, vm, act) {
 
 // The bar above the chat box while the app is hidden: the same transport as
 // the deck (no section word: "i don't want to see these intro drop 1 at all
-// here"), then auto, open and × on the right; over it the dancer, while the
-// music plays.
+// here"), then auto, open and × on the right. No dancer: hidden is hidden
+// (Paul, 2026-10-22).
 export function miniView(ui, vm, act) {
   if (!vm.view) return spread(ui, [ui.Text({ bold: true, children: ['♪'] }), dim(ui, vm.down || 'starting the player…')], [link(ui, 'mini-close', '×', () => act.closeBar())], 'mini')
-  const bar = spread(ui, [
+  return spread(ui, [
     ui.Text({ bold: true, children: ['♪'] }),
     ...transport(ui, vm, act, 'mini-'),
   ], [
@@ -362,6 +362,4 @@ export function miniView(ui, vm, act) {
     link(ui, 'mini-open', 'open', () => act.open()),
     link(ui, 'mini-close', '×', () => act.closeBar()),
   ], 'mini')
-  // the dancer dances over the bar while the music plays
-  return vm.playing && vm.dancerEl ? col(ui, [vm.dancerEl, bar]) : bar
 }
